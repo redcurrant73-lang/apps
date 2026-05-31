@@ -101,19 +101,12 @@ export default defineEventHandler(async (event) => {
 
   // ---- 状態を更新 & 必要なら圧縮 ----
   const now = Date.now()
+  const userMsg: HelperMessage = { role: 'user', text: question, createdAt: now }
+  if (savedImageId) userMsg.imageId = savedImageId
   const newMessages: HelperMessage[] = [
     ...state.messages,
-    {
-      role: 'user',
-      text: question,
-      imageId: savedImageId,
-      createdAt: now,
-    },
-    {
-      role: 'assistant',
-      text: answer,
-      createdAt: now + 1,
-    },
+    userMsg,
+    { role: 'assistant', text: answer, createdAt: now + 1 },
   ]
   let newState = { messages: newMessages, summary: state.summary }
   newState = await compressIfNeeded(decoded.uid, newState)

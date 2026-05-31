@@ -17,6 +17,13 @@ if (!getApps().length) {
 }
 
 export const db = getFirestore()
+// undefined を弾く Firestore の挙動は罠が多いので、保存時に黙って削除する。
+// (db.settings は最初の操作前に1回しか呼べないため try で守る)
+try {
+  db.settings({ ignoreUndefinedProperties: true })
+} catch {
+  // すでに設定済み(ホットリロード等)
+}
 
 // Firestore Timestamp 等をそのまま JSON 化すると壊れるので、API 応答用に整形する。
 export function serializeDoc<T extends Record<string, any>>(
