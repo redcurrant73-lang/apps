@@ -14,9 +14,7 @@ export const useAuth = () => {
 
   const configured = computed(() => !!$firebaseAuth)
   const isLoggedIn = computed(() => !!user.value)
-  const isSuperuser = computed(
-    () => profile.value?.role === 'superuser' || profile.value?.role === 'owner',
-  )
+  const isSuperuser = computed(() => profile.value?.role === 'superuser')
 
   const login = async () => {
     if (!$firebaseAuth) {

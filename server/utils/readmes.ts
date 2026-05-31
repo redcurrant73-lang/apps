@@ -58,12 +58,13 @@ export async function loadAllReadmes(): Promise<AppReadme[]> {
 /** あるアプリがそのユーザーのランチャーに表示されるべきか */
 async function isVisibleToUser(app: AppReadme, uid: string, role: Role | null): Promise<boolean> {
   if (app.audience === 'public') return true
-  if (role === 'superuser' || role === 'owner') return true
+  // superuser だけが全アプリ自動表示。owner は appAccess が必要(プライバシー設計)。
+  if (role === 'superuser') return true
   switch (app.visibility) {
     case 'always_visible':
       return true
     case 'superuser_only':
-      return false // superuser/owner は上で true 済み
+      return false
     case 'assignable':
       return hasAppAccess(uid, app.id, role)
     default:
