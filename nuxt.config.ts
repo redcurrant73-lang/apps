@@ -24,7 +24,12 @@ export default defineNuxtConfig({
       title: 'apps',
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
+        // 拡大禁止(ピンチズーム / ダブルタップズーム を無効化)
+        {
+          name: 'viewport',
+          content:
+            'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover',
+        },
         { name: 'theme-color', content: '#0ea5e9' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
@@ -75,17 +80,21 @@ export default defineNuxtConfig({
       navigateFallbackDenylist: [/^\/api\//],
     },
     manifest: {
+      id: '/',
+      scope: '/',
       name: 'apps',
       short_name: 'apps',
       description: 'ミニアプリ・プラットフォーム',
       lang: 'ja',
+      dir: 'ltr',
       start_url: '/',
       display: 'standalone',
+      orientation: 'portrait',
       background_color: '#ffffff',
       theme_color: '#0ea5e9',
       icons: [
-        { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-        { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+        { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
         { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       ],
     },
