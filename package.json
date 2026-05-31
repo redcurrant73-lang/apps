@@ -11,7 +11,7 @@
     "preview": "nuxt preview",
     "generate": "nuxt generate",
     "start": "node .output/server/index.mjs",
-    "postinstall": "nuxt prepare",
+    "postinstall": "nuxt prepare && node scripts/generate-icons.mjs",
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {

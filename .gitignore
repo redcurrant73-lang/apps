@@ -7,6 +7,12 @@ node_modules
 .data
 dist
 
+# generated placeholder icons (created by scripts/generate-icons.mjs on install)
+/public/icon-192.png
+/public/icon-512.png
+/public/apple-touch-icon.png
+/public/favicon.png
+
 # logs
 logs
 *.log
