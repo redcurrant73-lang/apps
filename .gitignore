@@ -1,0 +1,35 @@
+# dependencies
+node_modules
+
+# nuxt build / generate output
+.nuxt
+.output
+.data
+dist
+
+# generated placeholder icons (created by scripts/generate-icons.mjs on install)
+/public/icon-192.png
+/public/icon-512.png
+/public/apple-touch-icon.png
+/public/favicon.png
+
+# logs
+logs
+*.log
+npm-debug.log*
+
+# environment / secrets (絶対にコミットしない)
+.env
+.env.*
+!.env.example
+*-key.json
+service-account*.json
+
+# editor / os
+.DS_Store
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
