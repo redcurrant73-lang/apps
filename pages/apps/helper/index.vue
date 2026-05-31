@@ -206,15 +206,36 @@ watch(
 onBeforeUnmount(() => {
   for (const u of imageUrls.value.values()) URL.revokeObjectURL(u)
 })
+
+// iOS Safari は IME(キーボード)が開いても 100vh / 100dvh の値を変えないため、
+// 入力バーがキーボード上に張り付かず変な余白が出る。visualViewport.height を
+// 監視して、コンテナ高さを動的に追従させる。
+const viewportHeight = ref('100dvh')
+const updateViewportHeight = () => {
+  const h = window.visualViewport?.height ?? window.innerHeight
+  viewportHeight.value = `${h}px`
+}
+onMounted(() => {
+  if (typeof window === 'undefined') return
+  updateViewportHeight()
+  window.visualViewport?.addEventListener('resize', updateViewportHeight)
+  window.visualViewport?.addEventListener('scroll', updateViewportHeight)
+  window.addEventListener('orientationchange', updateViewportHeight)
+})
+onBeforeUnmount(() => {
+  if (typeof window === 'undefined') return
+  window.visualViewport?.removeEventListener('resize', updateViewportHeight)
+  window.visualViewport?.removeEventListener('scroll', updateViewportHeight)
+  window.removeEventListener('orientationchange', updateViewportHeight)
+})
 </script>
 
 <template>
   <!--
-    iOS Safari のツールバー / ホームバーと入力欄が被らないように:
-    - h-dvh : ツールバーが見えてる時は viewport がその分縮む(dynamic viewport)
-    - 入力バーの pb : safe-area-inset-bottom 分の余白を確保
+    iOS Safari は IME 開閉時に 100dvh が追従しないため、JS で visualViewport の
+    実高さを :style で当てる。入力バーの pb は safe-area-inset-bottom 分。
   -->
-  <div class="flex h-dvh flex-col">
+  <div class="flex flex-col" :style="{ height: viewportHeight }">
     <AppHeader title="ヘルパー" back="/" />
 
     <main ref="listEl" class="flex-1 overflow-y-auto px-4 py-4">
