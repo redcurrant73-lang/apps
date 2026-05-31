@@ -116,6 +116,38 @@ VAPID 鍵は次で生成できます: `npx web-push generate-vapid-keys`
 
 ---
 
+## 4.5 Firestore データベース本体
+
+API 有効化（手順1）だけでは DB の実体は作られません。`setup.sh` が以下を実行します
+（手動で流す場合のコマンド）:
+
+```bash
+gcloud firestore databases create --location="$REGION" --type=firestore-native
+```
+
+これが無いと、ログインや各 API が Firestore 接続で 500 になります。
+
+---
+
+## 4.6 Firebase 認証（gcloud では完結しない手作業）
+
+1. **Google ログインを有効化**
+   Firebase Console → Authentication → Sign-in method → **Google** を有効にする。
+2. **承認済みドメインに Cloud Run の URL を追加**
+   初回デプロイ後に発行される `https://apps-xxxx-an.a.run.app` の **host 部分**を、
+   Authentication → Settings → 承認済みドメイン に追加。
+   これが無いと `signInWithPopup` がブロックされる（＝ログインできない）。
+   - 初回はこの URL が未確定なので「デプロイ → URL確認 → ドメイン追加」の順になる。
+   - 独自ドメインを当てる場合はそのドメインも追加。
+3. **`FIREBASE_CONFIG`（公開設定）の取得元**
+   Console → プロジェクトの設定 → マイアプリ（Web）の `firebaseConfig`。
+   これを 1 行 JSON にして Secret Manager の `FIREBASE_CONFIG` に格納する:
+   ```json
+   {"apiKey":"...","authDomain":"<PROJECT_ID>.firebaseapp.com","projectId":"<PROJECT_ID>","appId":"..."}
+   ```
+
+---
+
 ## 5. GitHub リポジトリの Secrets / Variables
 
 GitHub → リポジトリ → Settings → Secrets and variables → Actions
