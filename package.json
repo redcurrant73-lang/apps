@@ -7,11 +7,11 @@
   },
   "scripts": {
     "dev": "nuxt dev",
+    "prebuild": "node scripts/generate-icons.mjs",
     "build": "nuxt build",
     "preview": "nuxt preview",
-    "generate": "nuxt generate",
+    "generate": "node scripts/generate-icons.mjs && nuxt generate",
     "start": "node .output/server/index.mjs",
-    "postinstall": "nuxt prepare && node scripts/generate-icons.mjs",
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {

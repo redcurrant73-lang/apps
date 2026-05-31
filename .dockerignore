@@ -1,0 +1,13 @@
+# Docker build context から除外(イメージに不要 / ビルドステージで作り直す)
+node_modules
+.nuxt
+.output
+.data
+dist
+.git
+.github
+*.log
+npm-debug.log*
+.DS_Store
+Dockerfile
+.dockerignore
