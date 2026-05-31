@@ -5,7 +5,7 @@ icon: 💬
 category: assistant
 audience: private
 dataScope: per-user
-visibility: assignable
+visibility: always_visible
 requiredApis:
   - gemini
 order: 0
