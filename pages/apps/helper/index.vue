@@ -161,12 +161,51 @@ const copy = async (text: string, idx: number) => {
   }
 }
 
-// 画像表示用 URL(保存済みは /api 経由、楽観はそのまま blob: URL)
+// 画像表示用 URL。
+//   - 楽観表示(送信前のローカルプレビュー)= blob: URL → そのまま使う
+//   - 保存済み画像 = /api/apps/helper/image/{id} を $api 経由で fetch して blob URL 化
+//     ($api は Authorization ヘッダーを自動付与する。<img src> から直接叩くと
+//      ヘッダーが付かず 401 になるのでこちらの経路にする)
+const imageUrls = ref<Map<string, string>>(new Map())
+
+const ensureBlobUrl = async (imageId: string) => {
+  if (imageUrls.value.has(imageId)) return
+  try {
+    const blob = await $api(`/api/apps/helper/image/${encodeURIComponent(imageId)}`, {
+      responseType: 'blob',
+    })
+    imageUrls.value.set(imageId, URL.createObjectURL(blob as Blob))
+  } catch {
+    // 取得失敗時はキーごと残さない(再試行可能にする)
+  }
+}
+
 const imageSrc = (val?: string | null) => {
   if (!val) return ''
   if (val.startsWith('blob:')) return val
-  return `/api/apps/helper/image/${encodeURIComponent(val)}`
+  const cached = imageUrls.value.get(val)
+  if (cached) return cached
+  // 非同期で取りに行く。fetch 完了で imageUrls に入り、リアクティブに再描画。
+  ensureBlobUrl(val)
+  return ''
 }
+
+// メッセージリストが更新されたら、未取得の画像をまとめて prefetch
+watch(
+  messages,
+  async (list) => {
+    const ids = list
+      .map((m) => m.imageId)
+      .filter((v): v is string => !!v && !v.startsWith('blob:') && !imageUrls.value.has(v))
+    await Promise.all(ids.map(ensureBlobUrl))
+  },
+  { deep: true },
+)
+
+// メモリリーク防止:ページ離脱時に blob URL を解放
+onBeforeUnmount(() => {
+  for (const u of imageUrls.value.values()) URL.revokeObjectURL(u)
+})
 </script>
 
 <template>
