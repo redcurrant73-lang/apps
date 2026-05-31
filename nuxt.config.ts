@@ -10,7 +10,7 @@ export default defineNuxtConfig({
   // ただし Nitro サーバー(server/api)は通常どおり動く。
   ssr: true,
 
-  modules: ['@nuxtjs/tailwindcss', '@nuxt/content', '@vite-pwa/nuxt'],
+  modules: ['@nuxtjs/tailwindcss', '@vite-pwa/nuxt'],
 
   css: ['~/assets/css/main.css'],
 
@@ -58,8 +58,6 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: 'node-server',
-    // content/ をサーバーバンドルに含め、readmes.ts から実体を読めるようにする
-    serverAssets: [{ baseName: 'content', dir: 'content' }],
   },
 
   pwa: {

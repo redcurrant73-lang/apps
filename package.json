@@ -6,11 +6,12 @@
     "node": ">=20"
   },
   "scripts": {
+    "predev": "node scripts/build-readmes.mjs && node scripts/generate-icons.mjs",
     "dev": "nuxt dev",
-    "prebuild": "node scripts/generate-icons.mjs",
+    "prebuild": "node scripts/build-readmes.mjs && node scripts/generate-icons.mjs",
     "build": "nuxt build",
     "preview": "nuxt preview",
-    "generate": "node scripts/generate-icons.mjs && nuxt generate",
+    "generate": "node scripts/build-readmes.mjs && node scripts/generate-icons.mjs && nuxt generate",
     "start": "node .output/server/index.mjs",
     "typecheck": "nuxt typecheck"
   },
@@ -22,7 +23,6 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@nuxt/content": "^2.13.4",
     "@nuxtjs/tailwindcss": "^6.13.1",
     "@types/web-push": "^3.6.4",
     "@vite-pwa/nuxt": "^0.10.6",
