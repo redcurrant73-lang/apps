@@ -18,7 +18,20 @@ interface Msg {
 
 const messages = ref<Msg[]>([])
 const input = ref('')
+const inputEl = ref<HTMLTextAreaElement | null>(null)
 const sending = ref(false)
+
+// textarea を内容に応じて自動で高さ調整(1行〜最大8rem)
+const autoGrow = () => {
+  const el = inputEl.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 128) + 'px'
+}
+// 送信後など input が空に戻ったら高さもリセット
+watch(input, (v) => {
+  if (!v) nextTick(() => { if (inputEl.value) inputEl.value.style.height = 'auto' })
+})
 const errorMsg = ref('')
 const listEl = ref<HTMLElement | null>(null)
 const copiedAt = ref<number | null>(null)
@@ -291,7 +304,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <form class="mx-auto flex max-w-2xl items-end gap-2" @submit.prevent="send">
+      <form class="mx-auto flex max-w-2xl items-center gap-2" @submit.prevent="send">
         <input
           ref="fileInput"
           type="file"
@@ -301,7 +314,7 @@ onBeforeUnmount(() => {
         />
         <button
           type="button"
-          class="btn-icon"
+          class="btn-icon shrink-0"
           aria-label="画像を添付"
           :disabled="sending"
           @click="pickImage"
@@ -309,18 +322,20 @@ onBeforeUnmount(() => {
           <Icon name="attach_file" size="22" />
         </button>
         <textarea
+          ref="inputEl"
           v-model="input"
           rows="1"
           placeholder="メッセージを入力…"
-          class="field max-h-32 flex-1 resize-none py-2.5"
+          class="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl bg-ink-50 px-4 py-[11px] text-base leading-snug ring-1 ring-inset ring-ink-200 placeholder:text-ink-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand"
+          @input="autoGrow"
           @keydown.enter.exact.prevent="send"
         />
         <button
-          class="btn-primary shrink-0 px-3"
+          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand text-white shadow-sm transition active:scale-95 disabled:opacity-40"
           :disabled="sending || (!input.trim() && !pendingImage)"
           aria-label="送信"
         >
-          <Icon name="send" size="18" />
+          <Icon name="send" size="20" />
         </button>
       </form>
     </div>
