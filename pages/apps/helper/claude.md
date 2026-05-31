@@ -49,7 +49,9 @@ gs://<project>.firebasestorage.app/apps/helper/users/{uid}/{imageId}
   → 必ず `loadReadmesForUser` / `listAccessibleApps` を経由する。
 - `requireAuth` を必ず最初に呼ぶ。
 - Gemini 呼び出し後は `recordGeminiUsage` で使用量を記録する(Settings/billing で可視化)。
-- モデルは `runtimeConfig.geminiModel`(既定 `gemini-2.0-flash`)、Vertex AI 経由。
+- モデルは `runtimeConfig.geminiModel`(既定 `gemini-2.5-flash`)、Vertex AI 経由・location=global。
+  ※ asia-northeast1 や gemini-2.0-flash はこのプロジェクトでは 404。利用可否は
+    `…/locations/global/publishers/google/models/<model>:generateContent` を叩いて確認できる。
 
 ## コスト管理(重要)
 このアプリは**毎ターン Gemini API を呼ぶ**。1日数百回使うと無視できない額になる。

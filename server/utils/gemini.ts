@@ -42,7 +42,7 @@ export function getGemini() {
   const project =
     (config as any).gcpProjectId || process.env.NUXT_GCP_PROJECT_ID || process.env.GCP_PROJECT_ID
   const location = (config as any).vertexLocation || 'global'
-  const model = config.geminiModel || 'gemini-2.0-flash'
+  const model = config.geminiModel || 'gemini-2.5-flash'
 
   if (!project) {
     throw createError({

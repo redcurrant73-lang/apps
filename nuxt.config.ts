@@ -44,7 +44,7 @@ export default defineNuxtConfig({
     // location=global は対応モデルが広い(asia-northeast1 は gemini-2.0-flash 無し)。
     gcpProjectId: '',
     vertexLocation: 'global',
-    geminiModel: 'gemini-2.0-flash',
+    geminiModel: 'gemini-2.5-flash',
     vapidPublic: '',
     vapidPrivate: '',
     vapidSubject: 'mailto:admin@example.com',
