@@ -25,18 +25,23 @@ const onLogin = async () => {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col items-center justify-center px-6">
+  <div class="flex min-h-dvh flex-col items-center justify-center px-6">
     <div class="w-full max-w-sm text-center">
-      <div class="mb-2 text-5xl">📱</div>
-      <h1 class="text-2xl font-bold text-slate-900">apps</h1>
-      <p class="mt-2 text-sm text-slate-500">あなた専用のミニアプリをまとめた場所です</p>
+      <div
+        class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand text-white shadow-lift"
+      >
+        <Icon name="apps" size="36" />
+      </div>
+      <h1 class="text-2xl font-bold tracking-tight text-ink-900">apps</h1>
+      <p class="mt-2 text-sm text-ink-600">あなた専用のミニアプリをまとめた場所です</p>
 
       <div class="mt-8 card text-left">
         <button
-          class="btn-primary w-full justify-center"
+          class="btn-primary w-full justify-center py-3"
           :disabled="loading || !configured"
           @click="onLogin"
         >
+          <Icon v-if="!loading" name="login" size="20" />
           <span v-if="loading">ログイン中…</span>
           <span v-else>Google でログイン</span>
         </button>

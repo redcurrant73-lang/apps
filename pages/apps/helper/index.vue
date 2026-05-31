@@ -240,15 +240,21 @@ onBeforeUnmount(() => {
 
     <main ref="listEl" class="flex-1 overflow-y-auto px-4 py-4">
       <div class="mx-auto max-w-2xl space-y-3">
-        <div v-if="initialLoading" class="text-center text-slate-400">読み込み中…</div>
+        <div v-if="initialLoading" class="text-center text-ink-400">読み込み中…</div>
 
         <div
           v-else-if="messages.length === 0"
-          class="card text-center text-slate-500"
+          class="card text-center text-ink-600"
         >
-          <div class="mb-1 text-3xl">💬</div>
-          アプリの使い方を聞いたり、「新しいアプリを作りたい」と相談できます。<br />
-          写真も送れます(📎ボタン)。
+          <span
+            class="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600"
+          >
+            <Icon name="support_agent" size="28" />
+          </span>
+          <p>アプリの使い方を聞いたり、「新しいアプリを作りたい」と相談できます。</p>
+          <p class="mt-1 text-sm text-ink-400">
+            写真も送れます(クリップマークから)
+          </p>
         </div>
 
         <div
@@ -258,11 +264,11 @@ onBeforeUnmount(() => {
           :class="m.role === 'user' ? 'justify-end' : 'justify-start'"
         >
           <div
-            class="max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2 text-sm"
+            class="max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed"
             :class="
               m.role === 'user'
-                ? 'bg-brand text-white'
-                : 'bg-white text-slate-800 ring-1 ring-slate-200'
+                ? 'bg-brand text-white shadow-sm'
+                : 'bg-white text-ink-800 shadow-card ring-1 ring-ink-100'
             "
           >
             <img
@@ -274,27 +280,35 @@ onBeforeUnmount(() => {
             <div v-if="m.text">{{ m.text }}</div>
             <button
               v-if="m.role === 'assistant' && m.text"
-              class="mt-2 block text-xs text-slate-400 hover:text-slate-600"
+              class="mt-2 inline-flex items-center gap-1 text-xs text-ink-400 hover:text-ink-600"
               @click="copy(m.text, i)"
             >
+              <Icon :name="copiedAt === i ? 'check' : 'content_copy'" size="14" />
               {{ copiedAt === i ? 'コピーしました' : 'コピー' }}
             </button>
           </div>
         </div>
 
-        <div v-if="sending" class="text-sm text-slate-400">考えています…</div>
+        <div v-if="sending" class="text-sm text-ink-400">考えています…</div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
       </div>
     </main>
 
     <div
-      class="border-t border-slate-200 bg-white px-4 py-3"
-      style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))"
+      class="border-t border-ink-100 bg-white px-3 py-2.5"
+      style="padding-bottom: max(0.625rem, env(safe-area-inset-bottom))"
     >
-      <div v-if="pendingImage" class="mx-auto mb-2 flex max-w-2xl items-center gap-2">
-        <img :src="pendingImage.previewUrl" class="h-16 w-16 rounded-lg object-cover" alt="" />
-        <span class="flex-1 text-xs text-slate-500">画像を1枚送信予定</span>
-        <button class="text-xs text-slate-400 hover:text-slate-600" @click="clearImage">
+      <div
+        v-if="pendingImage"
+        class="mx-auto mb-2 flex max-w-2xl items-center gap-3 rounded-xl bg-ink-50 p-2"
+      >
+        <img :src="pendingImage.previewUrl" class="h-14 w-14 rounded-lg object-cover" alt="" />
+        <span class="flex-1 text-xs text-ink-600">画像を1枚送信予定</span>
+        <button
+          class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-ink-400 hover:bg-ink-100 hover:text-ink-600"
+          @click="clearImage"
+        >
+          <Icon name="close" size="14" />
           取り消す
         </button>
       </div>
@@ -309,25 +323,26 @@ onBeforeUnmount(() => {
         />
         <button
           type="button"
-          class="rounded-xl px-3 py-2 text-lg hover:bg-slate-100"
+          class="btn-icon"
           aria-label="画像を添付"
           :disabled="sending"
           @click="pickImage"
         >
-          📎
+          <Icon name="attach_file" size="22" />
         </button>
         <textarea
           v-model="input"
           rows="1"
           placeholder="メッセージを入力…"
-          class="max-h-32 flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+          class="field max-h-32 flex-1 resize-none py-2.5"
           @keydown.enter.exact.prevent="send"
         />
         <button
-          class="btn-primary shrink-0"
+          class="btn-primary shrink-0 px-3"
           :disabled="sending || (!input.trim() && !pendingImage)"
+          aria-label="送信"
         >
-          送信
+          <Icon name="send" size="18" />
         </button>
       </form>
     </div>

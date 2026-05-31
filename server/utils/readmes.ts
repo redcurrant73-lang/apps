@@ -40,7 +40,9 @@ export async function loadAllReadmes(): Promise<AppReadme[]> {
       id: data.id ?? slug,
       slug,
       title: data.title ?? slug,
-      icon: data.icon ?? '📦',
+      // アイコンは Material Symbols 名(https://fonts.google.com/icons)。
+      // 例: 'support_agent', 'settings', 'savings', 'school'
+      icon: data.icon ?? 'apps',
       category: data.category,
       audience: (data.audience as Audience) ?? 'private',
       dataScope: (data.dataScope as DataScope) ?? 'per-user',

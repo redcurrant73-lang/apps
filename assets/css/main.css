@@ -4,6 +4,8 @@
 
 :root {
   color-scheme: light;
+  /* ベース背景色:本当に薄いブルーグレー */
+  --app-bg: #f6f8fb;
 }
 
 html,
@@ -12,16 +14,22 @@ body,
   min-height: 100%;
 }
 
+html {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
 body {
   -webkit-tap-highlight-color: transparent;
+  background: var(--app-bg);
+  color: theme('colors.ink.800');
 }
 
 /*
  * iOS Safari は input/textarea/select の font-size が 16px 未満だと
- * フォーカス時に自動でズームする(ピンチで戻せない/UX を壊す)。
- * viewport の user-scalable=no も iOS では無視されることが多いので、
- * タッチデバイス側でフォント側を 16px に強制してズームを防ぐ。
- * 見た目は text-sm を残しつつ、入力要素だけ実寸を 16px にする。
+ * フォーカス時に自動でズームする。タッチデバイスのみ font-size を強制。
  */
 @media (pointer: coarse) {
   input,
@@ -33,15 +41,24 @@ body {
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 font-medium transition active:scale-[0.98] disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-brand text-white hover:bg-brand-dark;
+    @apply btn bg-brand text-white shadow-sm hover:bg-brand-600 active:bg-brand-dark;
   }
   .btn-ghost {
-    @apply btn bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50;
+    @apply btn bg-white text-ink-800 ring-1 ring-ink-200 hover:bg-ink-50;
+  }
+  .btn-icon {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-full text-ink-600 transition hover:bg-ink-100 active:bg-ink-200 disabled:opacity-40;
   }
   .card {
-    @apply rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100;
+    @apply rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100;
+  }
+  .card-tap {
+    @apply card transition active:scale-[0.99] hover:shadow-lift;
+  }
+  .field {
+    @apply w-full rounded-xl border-0 bg-ink-50 px-4 py-3 text-base ring-1 ring-inset ring-ink-200 placeholder:text-ink-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand;
   }
 }

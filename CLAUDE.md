@@ -281,6 +281,18 @@ git log HEAD..origin/main --oneline
 
 ---
 
+## UI / アイコンのルール
+
+- **絵文字は使わない**。UI上のアイコンはすべて Google Material Symbols(Rounded)を `<Icon name="..." />` で描画する。
+  - 利用可能なアイコン名: https://fonts.google.com/icons
+  - 例: `<Icon name="settings" size="20" />` `<Icon name="support_agent" size="28" />`
+- アプリの `content/apps/{slug}.md` の frontmatter の `icon:` フィールドにも **絵文字ではなく Material Symbols 名**を入れる。
+  - OK: `icon: savings`  /  NG: `icon: 💰`
+- ボタン・カード等の見た目は `assets/css/main.css` の component layer (`btn-primary` / `btn-ghost` / `btn-icon` / `card` / `card-tap` / `field`)を再利用する。色は Tailwind の `brand` と `ink` で統一。
+- 新規ページでも、絵文字や `&rarr;` `←` を直書きしない。`<Icon name="chevron_right" />` `<Icon name="arrow_back" />` を使う。
+
+---
+
 ## ファイル配置ルール
 
 | 種類 | 場所 |

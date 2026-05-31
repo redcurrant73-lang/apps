@@ -37,6 +37,13 @@ export default defineNuxtConfig({
       link: [
         { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
         { rel: 'icon', href: '/favicon.png', type: 'image/png' },
+        // Material Symbols (Rounded): UI のアイコンを絵文字ではなくこれで描画する
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+        {
+          rel: 'stylesheet',
+          href: 'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..600,0..1,-25..0&display=block&family=Inter:wght@400;500;600;700&display=swap',
+        },
       ],
     },
   },

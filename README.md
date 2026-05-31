@@ -46,5 +46,9 @@ PROJECT_ID=your-project ./setup.sh
 
 ## 初期搭載アプリ
 
-- 💬 **ヘルパー** — AI アシスタント(アプリの使い方・新規アプリ相談)
-- ⚙️ **設定** — ユーザー管理 / アクセス権 / 料金(管理者のみ)
+- **ヘルパー** (`support_agent`) — AI アシスタント(アプリの使い方・新規アプリ相談)
+- **設定** (`settings`) — ユーザー管理 / アクセス権 / 料金(管理者のみ)
+
+## UI ルール
+
+UI 上のアイコンは**絵文字を使わず**、すべて [Google Material Symbols (Rounded)](https://fonts.google.com/icons) を `<Icon name="..." />` で描画する。アプリ frontmatter の `icon` フィールドにも Material Symbols 名(例: `savings`, `school`)を入れる。詳しくは `CLAUDE.md` の「UI / アイコンのルール」を参照。

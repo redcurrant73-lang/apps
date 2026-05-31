@@ -1,7 +1,7 @@
 ---
 id: helper
 title: ヘルパー
-icon: 💬
+icon: support_agent
 category: assistant
 audience: private
 dataScope: per-user
