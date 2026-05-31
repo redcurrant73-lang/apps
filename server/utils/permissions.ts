@@ -8,10 +8,22 @@ import { db } from './firestore'
 export type Role = 'owner' | 'superuser' | 'user'
 export type DataScope = 'per-user' | 'per-org' | 'global'
 
-/** ログイン必須。ID Token を検証して decoded token (uid, email 等) を返す */
+/**
+ * ログイン必須。ID Token を検証して decoded token (uid, email 等) を返す。
+ *
+ * トークンの取得元は 2 経路:
+ *   1) Authorization: Bearer <token>   — $fetch から呼ぶ通常API
+ *   2) Cookie: __session=<token>       — <img src> / <a href> 等、ヘッダーを
+ *                                        付けられないブラウザのリクエスト
+ *
+ * Cookie は firebase.client.ts が onAuthStateChanged で書き込む。
+ */
 export async function requireAuth(event: H3Event) {
   const header = getRequestHeader(event, 'authorization') || ''
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
+  let token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
+  if (!token) {
+    token = getCookie(event, '__session') || ''
+  }
   if (!token) {
     throw createError({ statusCode: 401, message: 'ログインが必要です' })
   }

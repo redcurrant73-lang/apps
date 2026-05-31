@@ -49,6 +49,11 @@ export default defineNuxtPlugin(() => {
     if (u) {
       try {
         const token = await u.getIdToken()
+        // Authorization ヘッダーを付けられない <img src> 等のために、
+        // 同じトークンを Cookie にも置く(SameSite=Lax で同一originに自動送信)。
+        // Firebase ID Token は 1時間で expire するので max-age も 1時間。
+        // HttpOnly は付けない(JS で書くため)。HTTPS 必須(Cloud Runは元から)。
+        document.cookie = `__session=${token}; path=/; max-age=3600; SameSite=Lax; Secure`
         // method を明示しないと $fetch は GET にしてしまい、
         // /api/auth/login.post.ts は 404 を返す(ユーザーDOCが永遠に作られない致命バグ)
         profile.value = await $fetch<SessionProfile>('/api/auth/login', {
@@ -60,6 +65,8 @@ export default defineNuxtPlugin(() => {
         profile.value = null
       }
     } else {
+      // ログアウト時は Cookie もクリア
+      document.cookie = '__session=; path=/; max-age=0; SameSite=Lax; Secure'
       profile.value = null
     }
     ready.value = true
