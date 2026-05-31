@@ -49,10 +49,14 @@ export default defineNuxtPlugin(() => {
     if (u) {
       try {
         const token = await u.getIdToken()
+        // method を明示しないと $fetch は GET にしてしまい、
+        // /api/auth/login.post.ts は 404 を返す(ユーザーDOCが永遠に作られない致命バグ)
         profile.value = await $fetch<SessionProfile>('/api/auth/login', {
+          method: 'POST',
           headers: { authorization: `Bearer ${token}` },
         })
-      } catch {
+      } catch (e) {
+        console.error('[firebase.client] auth/login failed:', e)
         profile.value = null
       }
     } else {

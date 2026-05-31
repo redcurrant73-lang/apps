@@ -170,7 +170,12 @@ const imageSrc = (val?: string | null) => {
 </script>
 
 <template>
-  <div class="flex h-screen flex-col">
+  <!--
+    iOS Safari のツールバー / ホームバーと入力欄が被らないように:
+    - h-dvh : ツールバーが見えてる時は viewport がその分縮む(dynamic viewport)
+    - 入力バーの pb : safe-area-inset-bottom 分の余白を確保
+  -->
+  <div class="flex h-dvh flex-col">
     <AppHeader title="ヘルパー" back="/" />
 
     <main ref="listEl" class="flex-1 overflow-y-auto px-4 py-4">
@@ -222,7 +227,10 @@ const imageSrc = (val?: string | null) => {
       </div>
     </main>
 
-    <div class="border-t border-slate-200 bg-white px-4 py-3">
+    <div
+      class="border-t border-slate-200 bg-white px-4 py-3"
+      style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))"
+    >
       <div v-if="pendingImage" class="mx-auto mb-2 flex max-w-2xl items-center gap-2">
         <img :src="pendingImage.previewUrl" class="h-16 w-16 rounded-lg object-cover" alt="" />
         <span class="flex-1 text-xs text-slate-500">画像を1枚送信予定</span>
