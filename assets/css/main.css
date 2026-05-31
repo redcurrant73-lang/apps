@@ -16,6 +16,21 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/*
+ * iOS Safari は input/textarea/select の font-size が 16px 未満だと
+ * フォーカス時に自動でズームする(ピンチで戻せない/UX を壊す)。
+ * viewport の user-scalable=no も iOS では無視されることが多いので、
+ * タッチデバイス側でフォント側を 16px に強制してズームを防ぐ。
+ * 見た目は text-sm を残しつつ、入力要素だけ実寸を 16px にする。
+ */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 font-medium transition active:scale-[0.98] disabled:opacity-50;
