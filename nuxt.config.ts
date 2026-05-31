@@ -40,9 +40,10 @@ export default defineNuxtConfig({
   //  - ルート直下 = サーバー専用 (NUXT_XXX で上書き)
   //  - public     = クライアントにも渡る (NUXT_PUBLIC_XXX で上書き)
   runtimeConfig: {
-    geminiApiKey: '',
-    // 既定モデル。Cloud Run 環境変数 NUXT_GEMINI_MODEL で上書き可。
-    // 1.5 系は古いので 2.0-flash を既定にする(2026年時点で広く利用可)。
+    // Gemini は Vertex AI 経由で呼ぶ(AI Studio の prepayment-credit モデルを回避)。
+    // 認証は Cloud Run 実行SAの ADC、課金は GCP プロジェクトに帰属。
+    gcpProjectId: '',
+    vertexLocation: 'asia-northeast1',
     geminiModel: 'gemini-2.0-flash',
     vapidPublic: '',
     vapidPrivate: '',

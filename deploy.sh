@@ -46,7 +46,7 @@ echo "==> [1/6] API を有効化(初回は数分かかります)"
 gcloud services enable \
   run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
   firestore.googleapis.com firebase.googleapis.com identitytoolkit.googleapis.com \
-  secretmanager.googleapis.com storage.googleapis.com generativelanguage.googleapis.com
+  secretmanager.googleapis.com storage.googleapis.com aiplatform.googleapis.com
 
 # ---- 2) Firestore データベース(Native)----
 echo "==> [2/6] Firestore データベースを作成"
@@ -83,8 +83,9 @@ upsert_secret FIREBASE_CONFIG   "${FIREBASE_CONFIG}"
 echo "==> [5/6] サービスアカウントに権限付与"
 PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
 RUNTIME_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-# 実行時: Firestore / Storage / Secret 参照
-for ROLE in roles/datastore.user roles/secretmanager.secretAccessor roles/storage.objectAdmin; do
+# 実行時: Firestore / Storage / Secret 参照 / Vertex AI 呼び出し
+for ROLE in roles/datastore.user roles/secretmanager.secretAccessor \
+            roles/storage.objectAdmin roles/aiplatform.user; do
   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${RUNTIME_SA}" --role="${ROLE}" >/dev/null
 done
@@ -104,8 +105,8 @@ gcloud run deploy "${SERVICE}" \
   --region "${REGION}" \
   --allow-unauthenticated \
   --quiet \
-  --set-env-vars="NUXT_SUPERUSER_EMAIL=${SUPERUSER_EMAIL},NUXT_OWNER_EMAIL=${OWNER_EMAIL}" \
-  --set-secrets="NUXT_GEMINI_API_KEY=GEMINI_API_KEY:latest,NUXT_VAPID_PUBLIC=VAPID_PUBLIC_KEY:latest,NUXT_VAPID_PRIVATE=VAPID_PRIVATE_KEY:latest,NUXT_VAPID_SUBJECT=VAPID_SUBJECT:latest,NUXT_PUBLIC_VAPID_PUBLIC=VAPID_PUBLIC_KEY:latest,NUXT_PUBLIC_FIREBASE_CONFIG=FIREBASE_CONFIG:latest"
+  --set-env-vars="NUXT_SUPERUSER_EMAIL=${SUPERUSER_EMAIL},NUXT_OWNER_EMAIL=${OWNER_EMAIL},NUXT_GCP_PROJECT_ID=${PROJECT_ID},NUXT_VERTEX_LOCATION=${REGION}" \
+  --set-secrets="NUXT_VAPID_PUBLIC=VAPID_PUBLIC_KEY:latest,NUXT_VAPID_PRIVATE=VAPID_PRIVATE_KEY:latest,NUXT_VAPID_SUBJECT=VAPID_SUBJECT:latest,NUXT_PUBLIC_VAPID_PUBLIC=VAPID_PUBLIC_KEY:latest,NUXT_PUBLIC_FIREBASE_CONFIG=FIREBASE_CONFIG:latest"
 
 URL="$(gcloud run services describe "${SERVICE}" --region "${REGION}" --format='value(status.url)')"
 cat <<EOF

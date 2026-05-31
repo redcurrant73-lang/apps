@@ -85,7 +85,8 @@ RUNTIME_SA="$(gcloud iam service-accounts list \
   --filter='displayName:Compute Engine default service account' \
   --format='value(email)' | head -n1 || true)"
 if [[ -n "${RUNTIME_SA}" ]]; then
-  for ROLE in roles/datastore.user roles/secretmanager.secretAccessor roles/storage.objectAdmin; do
+  for ROLE in roles/datastore.user roles/secretmanager.secretAccessor \
+              roles/storage.objectAdmin roles/aiplatform.user; do
     gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
       --member="serviceAccount:${RUNTIME_SA}" --role="${ROLE}" >/dev/null
   done
