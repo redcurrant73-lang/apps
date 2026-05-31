@@ -1,17 +1,19 @@
 // Firebase Admin SDK の初期化
 // Cloud Run 上では applicationDefault() が実行サービスアカウントの資格情報を
-// メタデータサーバーから自動取得する。ローカル開発で資格情報が無い場合でも
-// 初期化自体は失敗せず、実際に Firestore へアクセスした時点でのみエラーになる。
+// メタデータサーバーから自動取得する。
+// projectId を env から明示する(ADC の自動検出だけに頼ると一部環境で別プロジェクトに
+// 繋いでしまう/audience 不一致でトークン検証が落ちることがあるため確実性を上げる)。
 import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 
+const projectId =
+  process.env.NUXT_GCP_PROJECT_ID ||
+  process.env.GCP_PROJECT_ID ||
+  process.env.GOOGLE_CLOUD_PROJECT ||
+  undefined
+
 if (!getApps().length) {
-  try {
-    initializeApp({ credential: applicationDefault() })
-  } catch {
-    // 資格情報が見つからない環境 (ローカル等) でもサーバー起動は止めない
-    initializeApp()
-  }
+  initializeApp({ credential: applicationDefault(), projectId })
 }
 
 export const db = getFirestore()
