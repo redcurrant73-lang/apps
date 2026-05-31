@@ -28,20 +28,27 @@ export async function getUserRole(uid: string): Promise<Role | null> {
   return (snap.data()?.role as Role) ?? null
 }
 
-/** superuser / owner のみ通す */
+/**
+ * アプリ世界の管理者(superuser)のみ通す。
+ * owner は「システム管理ラベル」であってアプリ世界では普通のユーザー扱いなので通さない。
+ * (owner が緊急で何か触る必要があるときは Firestore / GCP コンソール直で対応する)
+ */
 export async function requireSuperuser(event: H3Event) {
   const decoded = await requireAuth(event)
   const role = await getUserRole(decoded.uid)
-  if (role !== 'superuser' && role !== 'owner') {
+  if (role !== 'superuser') {
     throw createError({ statusCode: 403, message: '権限がありません' })
   }
   return decoded
 }
 
-/** 指定アプリへのアクセス権があるか (role / appAccess を見る) */
+/**
+ * 指定アプリへのアクセス権があるか。
+ * superuser のみ自動で全アプリアクセス可。owner は appAccess の付与が必要。
+ */
 export async function hasAppAccess(uid: string, appId: string, role?: Role | null) {
   const r = role ?? (await getUserRole(uid))
-  if (r === 'superuser' || r === 'owner') return true
+  if (r === 'superuser') return true
   const snap = await db.collection('appAccess').doc(`${uid}_${appId}`).get()
   return snap.exists
 }

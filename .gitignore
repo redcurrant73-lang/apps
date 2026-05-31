@@ -7,11 +7,14 @@ node_modules
 .data
 dist
 
-# generated placeholder icons (created by scripts/generate-icons.mjs on install)
+# generated placeholder icons (created by scripts/generate-icons.mjs on prebuild)
 /public/icon-192.png
 /public/icon-512.png
 /public/apple-touch-icon.png
 /public/favicon.png
+
+# generated app readmes (created by scripts/build-readmes.mjs on prebuild)
+/server/utils/_readmes-generated.ts
 
 # logs
 logs

@@ -1,10 +1,11 @@
 // ミニアプリの定義は content/apps/{slug}.md の frontmatter が「正」。
 // 別レジストリは持たず、このファイル群を読んでアプリ一覧・権限・AIコンテキストを作る。
 //
-// 実体は nuxt.config の nitro.serverAssets でサーバーバンドルに含めているため、
-// Cloud Run 上でも useStorage('assets:content') 経由で読める。
+// .md は scripts/build-readmes.mjs が prebuild/predev で TS にインライン化する
+// (Nitro の serverAssets 経由は @nuxt/content と衝突するため避ける)。
 import matter from 'gray-matter'
 import { getUserRole, hasAppAccess, type Role, type DataScope } from './permissions'
+import { RAW_README_FILES } from './_readmes-generated'
 
 export type Audience = 'private' | 'shared' | 'public'
 export type Visibility = 'always_visible' | 'assignable' | 'superuser_only'
@@ -31,18 +32,10 @@ export interface AccessibleApp extends AppReadme {
 
 /** content/apps/*.md をすべて読み込んで frontmatter を解析する */
 export async function loadAllReadmes(): Promise<AppReadme[]> {
-  const storage = useStorage('assets:content')
-  const keys = await storage.getKeys('apps')
   const out: AppReadme[] = []
 
-  for (const key of keys) {
-    if (!key.endsWith('.md')) continue
-    const raw = await storage.getItem(key)
-    const text = typeof raw === 'string' ? raw : raw ? String(raw) : ''
-    if (!text) continue
-
-    const slug = key.replace(/^.*apps:/, '').replace(/\.md$/, '')
-    const { data, content } = matter(text)
+  for (const { slug, raw } of RAW_README_FILES) {
+    const { data, content } = matter(raw)
     out.push({
       id: data.id ?? slug,
       slug,
@@ -65,12 +58,13 @@ export async function loadAllReadmes(): Promise<AppReadme[]> {
 /** あるアプリがそのユーザーのランチャーに表示されるべきか */
 async function isVisibleToUser(app: AppReadme, uid: string, role: Role | null): Promise<boolean> {
   if (app.audience === 'public') return true
-  if (role === 'superuser' || role === 'owner') return true
+  // superuser だけが全アプリ自動表示。owner は appAccess が必要(プライバシー設計)。
+  if (role === 'superuser') return true
   switch (app.visibility) {
     case 'always_visible':
       return true
     case 'superuser_only':
-      return false // superuser/owner は上で true 済み
+      return false
     case 'assignable':
       return hasAppAccess(uid, app.id, role)
     default:

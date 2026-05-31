@@ -34,9 +34,9 @@ const msg = ref('')
 
 const key = (uid: string, appId: string) => `${uid}_${appId}`
 
-// superuser / owner は常に全アプリ利用可
+// superuser だけが常に全アプリ利用可(owner は通常ユーザー扱いで、個別に付与する)
 const isAlways = (u: U, a: A) =>
-  u.role === 'superuser' || u.role === 'owner' || a.visibility === 'always_visible'
+  u.role === 'superuser' || a.visibility === 'always_visible'
 
 const isChecked = (u: U, a: A) => isAlways(u, a) || !!grants.value[key(u.id, a.id)]
 
