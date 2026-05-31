@@ -1,7 +1,8 @@
 // Helper(AIアシスタント)のチャット。
 // ユーザーがアクセスできるアプリの README だけをコンテキストに含めて Gemini に渡す。
+// visibility=assignable のため、API も requireAppAccess で守る。
 export default defineEventHandler(async (event) => {
-  const decoded = await requireAuth(event)
+  const decoded = await requireAppAccess(event, 'helper')
   const body = await readBody(event)
   const question = String(body?.question ?? body?.message ?? '').trim()
   const history: { role: string; text: string }[] = Array.isArray(body?.history) ? body.history : []
@@ -37,7 +38,19 @@ export default defineEventHandler(async (event) => {
   ].join('\n')
 
   const model = getGemini()
-  const result = await model.generateContent(prompt)
+  let result
+  try {
+    result = await model.generateContent(prompt)
+  } catch (e: any) {
+    // Gemini 側のエラーをそのまま隠さず、デバッグできるメッセージに包む。
+    // (モデル名違い・APIキー無効・クォータ等の見分けがつくように)
+    const msg = e?.message || String(e)
+    console.error('[helper/chat] gemini error:', msg)
+    throw createError({
+      statusCode: 502,
+      message: `AIへの問い合わせに失敗しました: ${msg.slice(0, 200)}`,
+    })
+  }
   const answer = result.response.text()
 
   // 使用量を記録(失敗してもチャット応答は返す)

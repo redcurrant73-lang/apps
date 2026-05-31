@@ -41,7 +41,9 @@ export default defineNuxtConfig({
   //  - public     = クライアントにも渡る (NUXT_PUBLIC_XXX で上書き)
   runtimeConfig: {
     geminiApiKey: '',
-    geminiModel: 'gemini-1.5-flash',
+    // 既定モデル。Cloud Run 環境変数 NUXT_GEMINI_MODEL で上書き可。
+    // 1.5 系は古いので 2.0-flash を既定にする(2026年時点で広く利用可)。
+    geminiModel: 'gemini-2.0-flash',
     vapidPublic: '',
     vapidPrivate: '',
     vapidSubject: 'mailto:admin@example.com',

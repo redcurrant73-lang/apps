@@ -36,6 +36,113 @@
 
 ---
 
+## 🚀 push と自動デプロイの正確な手順 (Claude Code 用・抜かりなく)
+
+### 1) このリポジトリの仕組み
+
+| 何 | どこ |
+|---|---|
+| GitHub リポジトリ | `redcurrant73-lang/apps` |
+| 自動デプロイ起動 | `main` ブランチへの push(直接 or PRマージ) |
+| デプロイ実行 | `.github/workflows/deploy.yml` |
+| 認証 | Workload Identity Federation (鍵ファイル不要) |
+| デプロイ先 | Cloud Run service `apps` (asia-northeast1) |
+| プロジェクト | `apps-498001` |
+| 本番URL | `https://apps-390434448893.asia-northeast1.run.app` |
+
+### 2) ブランチ運用
+
+- **`main`** は本番直結。ここに push = 本番に出る。
+- 普段は **`claude/xxx`(機能ブランチ)で開発** → main にマージ。
+- 個別作業の途中で main に直接 push しない(壊れたまま本番に出る)。
+- ゆうき(夫)が手元で main を直すことがある。**作業前と push前**に `git fetch origin main` で必ず確認。
+
+### 3) コードを公開するまでの標準手順
+
+```bash
+# A. 作業前: 必ず最新を取り込む
+git fetch origin main
+git log HEAD..origin/main --oneline    # 空ならOK / あれば取り込み (git pull --rebase origin main)
+
+# B. 編集 → ローカルで検証 (型/ビルド/可能なら起動)
+npm run build                            # ← Cloud Run と同じビルドが通るか確認
+
+# C. 変更を記録
+git add <変更したファイル>
+git commit -m "<簡潔な意図>"
+
+# D. push 前にもう一度 main を確認
+git fetch origin main
+git log HEAD..origin/main --oneline    # 空ならOK
+
+# E. 機能ブランチに送信
+git push -u origin <作業ブランチ名>
+
+# F. main へ反映 → 自動デプロイ起動
+#    方法1: GitHub UI で PR (作業ブランチ → main) → Merge pull request
+#    方法2: ゆうきに main マージ依頼(レビュー要なとき)
+```
+
+### 4) デプロイの進捗確認
+
+- Actions ログ: https://github.com/redcurrant73-lang/apps/actions
+- 緑✅で成功、赤×で失敗。
+- 失敗時は最後のステップのログを読む(`gcloud run deploy --source .` のビルドログへのリンクが出る)。
+- 成功すると `Service URL: https://apps-390434448893.asia-northeast1.run.app` が出る。
+
+### 5) push 前のセルフチェックリスト
+
+- [ ] `npm run build` が手元で通る
+- [ ] 新規ファイルは `git status` で「U」(untracked)が残っていない
+- [ ] `git fetch origin main` で差分なし
+- [ ] commit メッセージが「何を/なぜ」を1〜2文で説明している
+- [ ] secret や個人情報をコミットしてない(`.env`、`*-key.json`、Firebase config 値、APIキー)
+
+### 6) シークレット/環境変数を増やしたいとき
+
+「本番にも入れる必要があるか」を必ず判断。本番に必要な場合の流れ:
+
+1. **Secret Manager に値を登録**(または既存に new version 追加)
+   ```bash
+   printf '%s' "値" | gcloud secrets versions add MY_NEW_SECRET --data-file=-
+   ```
+   (シークレット自体が無ければ `gcloud secrets create MY_NEW_SECRET --replication-policy=automatic`)
+2. **`.github/workflows/deploy.yml` の `--set-secrets=` に追記**(Cloud Run に注入する組み合わせ `NUXT_XXX=MY_NEW_SECRET:latest`)
+3. **`nuxt.config.ts` の `runtimeConfig`(or `runtimeConfig.public`)に項目を増やす**(クライアントに渡るかどうかで `public` の下に置くか分ける)
+4. main に反映 → 自動デプロイで本番にも届く
+
+非機密の値(ロールマッピングメールなど)は **GitHub Variables** に置いて `deploy.yml` で `vars.XXX` から `--set-env-vars=NUXT_XXX=...` で流す。
+
+### 7) 緊急時(自動デプロイがコケて急ぎたい)
+
+通常は **コードを直して push** が正攻法。それでも止まらないとき限定で、Cloud Shell から直接デプロイ:
+
+```bash
+cd ~/apps && git pull
+gcloud run deploy apps --source . --region asia-northeast1 --allow-unauthenticated --quiet \
+  --set-env-vars="NUXT_SUPERUSER_EMAIL=redcurrant73@gmail.com,NUXT_OWNER_EMAIL=konishi0221@gmail.com" \
+  --set-secrets="NUXT_GEMINI_API_KEY=GEMINI_API_KEY:latest,NUXT_VAPID_PUBLIC=VAPID_PUBLIC_KEY:latest,NUXT_VAPID_PRIVATE=VAPID_PRIVATE_KEY:latest,NUXT_VAPID_SUBJECT=VAPID_SUBJECT:latest,NUXT_PUBLIC_VAPID_PUBLIC=VAPID_PUBLIC_KEY:latest,NUXT_PUBLIC_FIREBASE_CONFIG=FIREBASE_CONFIG:latest"
+```
+
+ただしこの手は **Actions の履歴に残らない**ので、緊急時以外は使わない。
+
+### 8) ロールバック
+
+「直前バージョンに戻したい」場合:
+
+```bash
+# 直近のリビジョン一覧を見る
+gcloud run revisions list --service apps --region asia-northeast1
+
+# 1つ前のリビジョンに 100% トラフィックを向ける
+gcloud run services update-traffic apps --region asia-northeast1 \
+  --to-revisions <前のリビジョン名>=100
+```
+
+コードの方も `git revert` で main を巻き戻すこと(放置すると次の push でまた壊れる)。
+
+---
+
 ## 🚨 Git運用ルール (超重要・必ず守る)
 
 ユーザーの夫(ゆうき)が別途このリポジトリを編集している可能性があります。
