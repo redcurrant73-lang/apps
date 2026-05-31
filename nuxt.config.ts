@@ -41,9 +41,9 @@ export default defineNuxtConfig({
   //  - public     = クライアントにも渡る (NUXT_PUBLIC_XXX で上書き)
   runtimeConfig: {
     // Gemini は Vertex AI 経由で呼ぶ(AI Studio の prepayment-credit モデルを回避)。
-    // 認証は Cloud Run 実行SAの ADC、課金は GCP プロジェクトに帰属。
+    // location=global は対応モデルが広い(asia-northeast1 は gemini-2.0-flash 無し)。
     gcpProjectId: '',
-    vertexLocation: 'asia-northeast1',
+    vertexLocation: 'global',
     geminiModel: 'gemini-2.0-flash',
     vapidPublic: '',
     vapidPrivate: '',

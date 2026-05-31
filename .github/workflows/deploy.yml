@@ -32,7 +32,7 @@ jobs:
             --region "${{ vars.GCP_REGION || 'asia-northeast1' }}" \
             --allow-unauthenticated \
             --quiet \
-            --set-env-vars="NUXT_SUPERUSER_EMAIL=${{ vars.SUPERUSER_EMAIL }},NUXT_OWNER_EMAIL=${{ vars.OWNER_EMAIL }},NUXT_GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }},NUXT_VERTEX_LOCATION=${{ vars.GCP_REGION || 'asia-northeast1' }}" \
+            --set-env-vars="NUXT_SUPERUSER_EMAIL=${{ vars.SUPERUSER_EMAIL }},NUXT_OWNER_EMAIL=${{ vars.OWNER_EMAIL }},NUXT_GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }},NUXT_VERTEX_LOCATION=global" \
             --set-secrets="NUXT_VAPID_PUBLIC=VAPID_PUBLIC_KEY:latest,NUXT_VAPID_PRIVATE=VAPID_PRIVATE_KEY:latest,NUXT_VAPID_SUBJECT=VAPID_SUBJECT:latest,NUXT_PUBLIC_VAPID_PUBLIC=VAPID_PUBLIC_KEY:latest,NUXT_PUBLIC_FIREBASE_CONFIG=FIREBASE_CONFIG:latest"
 
       - name: Show service URL
