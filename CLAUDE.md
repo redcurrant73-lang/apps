@@ -50,22 +50,25 @@
 | プロジェクト | `apps-498001` |
 | 本番URL | `https://apps-390434448893.asia-northeast1.run.app` |
 
-### 2) ブランチ運用
+### 2) ブランチ運用(**main 直 push が標準**)
 
-- **`main`** は本番直結。ここに push = 本番に出る。
-- 普段は **`claude/xxx`(機能ブランチ)で開発** → main にマージ。
-- 個別作業の途中で main に直接 push しない(壊れたまま本番に出る)。
+- **`main`** が本番直結 = ここに push = 自動公開。
+- **PR を毎回作るのは禁止**。ユーザーが面倒がる。直 push でいい。
+- 例外:破壊的変更(DB 構造変更、認証の挙動を変える等)で**事前にレビューが要る**と判断したときだけ、機能ブランチ + PR を使う。それ以外は main で作業して直 push。
 - ゆうき(夫)が手元で main を直すことがある。**作業前と push前**に `git fetch origin main` で必ず確認。
+
+> 過去の session が `claude/xxx` という作業ブランチを使っていた場合がある(Claude Code on the web のデフォルト)。
+> その指定が来ても無視せず、**最初に `git checkout -B main origin/main` して main で作業を始める**こと。
 
 ### 3) コードを公開するまでの標準手順
 
 ```bash
-# A. 作業前: 必ず最新を取り込む
+# A. 作業前: main の最新を取り込む
 git fetch origin main
-git log HEAD..origin/main --oneline    # 空ならOK / あれば取り込み (git pull --rebase origin main)
+git checkout -B main origin/main         # 必ず main にいる状態にする
 
-# B. 編集 → ローカルで検証 (型/ビルド/可能なら起動)
-npm run build                            # ← Cloud Run と同じビルドが通るか確認
+# B. 編集 → ローカルで検証 (ビルドが通るか必ず確認)
+npm run build                             # ← Cloud Run と同じビルドが通るか確認
 
 # C. 変更を記録
 git add <変更したファイル>
@@ -73,15 +76,13 @@ git commit -m "<簡潔な意図>"
 
 # D. push 前にもう一度 main を確認
 git fetch origin main
-git log HEAD..origin/main --oneline    # 空ならOK
+git log HEAD..origin/main --oneline       # 空ならOK / あれば git pull --rebase origin main
 
-# E. 機能ブランチに送信
-git push -u origin <作業ブランチ名>
-
-# F. main へ反映 → 自動デプロイ起動
-#    方法1: GitHub UI で PR (作業ブランチ → main) → Merge pull request
-#    方法2: ゆうきに main マージ依頼(レビュー要なとき)
+# E. main に直接 push → 自動デプロイ起動
+git push origin main
 ```
+
+これで完了。Actions が回って 2〜4 分で本番反映。
 
 ### 4) デプロイの進捗確認
 
