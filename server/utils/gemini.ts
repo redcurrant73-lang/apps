@@ -41,27 +41,37 @@ export function getGemini() {
     auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] })
   }
 
+  const call = async (body: any): Promise<GenContentResponse> => {
+    const client = await auth!.getClient()
+    const url =
+      `https://${location}-aiplatform.googleapis.com/v1/projects/${project}` +
+      `/locations/${location}/publishers/google/models/${model}:generateContent`
+    const res = await client.request<any>({ url, method: 'POST', data: body })
+    const data = res.data || {}
+    const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    return {
+      response: {
+        text: () => text,
+        usageMetadata: data.usageMetadata ?? null,
+      },
+    }
+  }
+
   return {
+    /**
+     * 後方互換:単発プロンプト(文字列)を渡すと user 1 ターンで送信。
+     */
     async generateContent(prompt: string): Promise<GenContentResponse> {
-      const client = await auth!.getClient()
-      const url =
-        `https://${location}-aiplatform.googleapis.com/v1/projects/${project}` +
-        `/locations/${location}/publishers/google/models/${model}:generateContent`
-      const res = await client.request<any>({
-        url,
-        method: 'POST',
-        data: {
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        },
-      })
-      const data = res.data || {}
-      const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-      return {
-        response: {
-          text: () => text,
-          usageMetadata: data.usageMetadata ?? null,
-        },
-      }
+      return call({ contents: [{ role: 'user', parts: [{ text: prompt }] }] })
+    },
+    /**
+     * 履歴・画像・systemInstruction を含む本格チャット呼び出し。
+     */
+    async chat(args: {
+      contents: Array<{ role: 'user' | 'model'; parts: Array<any> }>
+      systemInstruction?: { parts: Array<{ text: string }> }
+    }): Promise<GenContentResponse> {
+      return call(args)
     },
   }
 }
