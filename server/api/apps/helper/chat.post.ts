@@ -1,8 +1,10 @@
 // Helper(AIアシスタント)のチャット。
 // ユーザーがアクセスできるアプリの README だけをコンテキストに含めて Gemini に渡す。
-// visibility=assignable のため、API も requireAppAccess で守る。
+// visibility=always_visible のため、ログイン済みなら誰でも使える。
+// (ヘルパーが返す内容は loadReadmesForUser でその人のアクセス権範囲に絞られるので、
+//  他人のアプリ情報は漏れない。)
 export default defineEventHandler(async (event) => {
-  const decoded = await requireAppAccess(event, 'helper')
+  const decoded = await requireAuth(event)
   const body = await readBody(event)
   const question = String(body?.question ?? body?.message ?? '').trim()
   const history: { role: string; text: string }[] = Array.isArray(body?.history) ? body.history : []
