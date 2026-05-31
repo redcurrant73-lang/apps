@@ -1,0 +1,29 @@
+# dependencies
+node_modules
+
+# nuxt build / generate output
+.nuxt
+.output
+.data
+dist
+
+# logs
+logs
+*.log
+npm-debug.log*
+
+# environment / secrets (絶対にコミットしない)
+.env
+.env.*
+!.env.example
+*-key.json
+service-account*.json
+
+# editor / os
+.DS_Store
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln

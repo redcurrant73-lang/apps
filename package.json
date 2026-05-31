@@ -1,0 +1,36 @@
+{
+  "name": "apps",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "generate": "nuxt generate",
+    "start": "node .output/server/index.mjs",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "firebase": "^11.1.0",
+    "firebase-admin": "^13.0.2",
+    "gray-matter": "^4.0.3",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@nuxt/content": "^2.13.4",
+    "@nuxtjs/tailwindcss": "^6.13.1",
+    "@types/web-push": "^3.6.4",
+    "@vite-pwa/nuxt": "^0.10.6",
+    "nuxt": "^3.15.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0",
+    "vue-tsc": "^2.2.0"
+  }
+}

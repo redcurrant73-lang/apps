@@ -1,0 +1,4 @@
+{
+  // Nuxt が生成する設定を継承する (npm install 後の `nuxt prepare` で作成される)
+  "extends": "./.nuxt/tsconfig.json"
+}
