@@ -24,11 +24,14 @@ export default defineNuxtConfig({
       title: 'apps',
       meta: [
         { charset: 'utf-8' },
-        // 拡大禁止(ピンチズーム / ダブルタップズーム を無効化)
+        // 拡大禁止(ピンチズーム/ダブルタップズーム)+
+        // interactive-widget=resizes-content: iOS 16.4+ / Chrome で、IME(キーボード)が
+        // 開いた時に viewport を自動リサイズさせる。これがあると 100dvh が正しく縮み、
+        // 入力バーがキーボード上に綺麗に張り付く(JSの visualViewport ハックが不要に)。
         {
           name: 'viewport',
           content:
-            'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover',
+            'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content',
         },
         { name: 'theme-color', content: '#0ea5e9' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },

@@ -207,35 +207,13 @@ onBeforeUnmount(() => {
   for (const u of imageUrls.value.values()) URL.revokeObjectURL(u)
 })
 
-// iOS Safari は IME(キーボード)が開いても 100vh / 100dvh の値を変えないため、
-// 入力バーがキーボード上に張り付かず変な余白が出る。visualViewport.height を
-// 監視して、コンテナ高さを動的に追従させる。
-const viewportHeight = ref('100dvh')
-const updateViewportHeight = () => {
-  const h = window.visualViewport?.height ?? window.innerHeight
-  viewportHeight.value = `${h}px`
-}
-onMounted(() => {
-  if (typeof window === 'undefined') return
-  updateViewportHeight()
-  window.visualViewport?.addEventListener('resize', updateViewportHeight)
-  window.visualViewport?.addEventListener('scroll', updateViewportHeight)
-  window.addEventListener('orientationchange', updateViewportHeight)
-})
-onBeforeUnmount(() => {
-  if (typeof window === 'undefined') return
-  window.visualViewport?.removeEventListener('resize', updateViewportHeight)
-  window.visualViewport?.removeEventListener('scroll', updateViewportHeight)
-  window.removeEventListener('orientationchange', updateViewportHeight)
-})
+// IME 高さ追従は viewport meta の interactive-widget=resizes-content に任せる
+// (iOS 16.4+ / Chrome で 100dvh が IME 開閉に合わせて縮む)。JS フォールバック不要。
 </script>
 
 <template>
-  <!--
-    iOS Safari は IME 開閉時に 100dvh が追従しないため、JS で visualViewport の
-    実高さを :style で当てる。入力バーの pb は safe-area-inset-bottom 分。
-  -->
-  <div class="flex flex-col" :style="{ height: viewportHeight }">
+  <!-- viewport meta の interactive-widget=resizes-content で 100dvh が IME に追従する -->
+  <div class="flex h-dvh flex-col">
     <AppHeader title="ヘルパー" back="/" />
 
     <main ref="listEl" class="flex-1 overflow-y-auto px-4 py-4">
