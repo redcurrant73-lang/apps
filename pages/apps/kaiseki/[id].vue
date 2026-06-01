@@ -87,7 +87,7 @@ const saveEdit = async () => {
 }
 
 // ---- カテゴリー順 ----
-const KAISEKI_ORDER = ['先付', '前八寸', 'お椀', '造り', '焼物', '煮物', '食事', '甘味']
+const KAISEKI_ORDER = ['先付', '前八寸', 'お椀', '造り', '焼物', '煮物', '進肴', '食事', '甘味']
 const EN_ORDER = [
   'Amuse-Bouche', 'Appetizer', 'Soup', 'Sashimi', 'Grilled',
   'Simmered', 'Fried', 'Steamed', 'Rice Course', 'Seasonal Fruits', 'Dessert',
