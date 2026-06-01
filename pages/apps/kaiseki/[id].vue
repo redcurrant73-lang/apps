@@ -11,11 +11,18 @@ watch(
   { immediate: true },
 )
 
+interface Term {
+  word: string
+  reading: string
+  explanation: string
+}
+
 interface Dish {
   nameJa: string
   reading: string
   category: string
   descriptionJa: string
+  terms?: Term[]
   nameEn: string
   categoryEn: string
   descriptionEn: string
@@ -35,6 +42,8 @@ const lang = ref<'ja' | 'en'>('ja')
 const deleting = ref(false)
 const showDeleteConfirm = ref(false)
 const imageUrl = ref('')
+const selectedTerm = ref<Term | null>(null)
+const speaking = ref('')
 
 onMounted(async () => {
   try {
@@ -55,6 +64,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (imageUrl.value) URL.revokeObjectURL(imageUrl.value)
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel()
 })
 
 const groupedJa = computed(() => {
@@ -78,6 +88,26 @@ const groupedEn = computed(() => {
   }
   return [...map.entries()].map(([cat, dishes]) => ({ cat, dishes }))
 })
+
+const speak = (text: string) => {
+  if (!('speechSynthesis' in window)) return
+  try {
+    const clean = text.replace(/[,.:;!?]+$/g, '').trim()
+    if (!clean) return
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(clean)
+    utterance.lang = 'en-US'
+    utterance.rate = 0.85
+    speaking.value = clean
+    utterance.onend = () => { speaking.value = '' }
+    utterance.onerror = () => { speaking.value = '' }
+    window.speechSynthesis.speak(utterance)
+  } catch {
+    speaking.value = ''
+  }
+}
+
+const wordsOf = (text: string) => text.split(' ').filter(Boolean)
 
 const deleteMenu = async () => {
   if (!menu.value) return
@@ -143,6 +173,17 @@ const deleteMenu = async () => {
                   <p class="mt-1.5 text-sm leading-relaxed text-ink-600">
                     {{ dish.descriptionJa }}
                   </p>
+                  <!-- 用語チップ -->
+                  <div v-if="dish.terms?.length" class="mt-2.5 flex flex-wrap gap-1.5">
+                    <button
+                      v-for="term in dish.terms"
+                      :key="term.word"
+                      class="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100 active:bg-brand-200"
+                      @click="selectedTerm = term"
+                    >
+                      {{ term.word }} とは？
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -150,6 +191,7 @@ const deleteMenu = async () => {
 
           <!-- 英語表示 -->
           <div v-else class="space-y-8">
+            <p class="mb-2 text-xs text-ink-400 text-center">単語をタップすると発音が聞けます</p>
             <div v-for="group in groupedEn" :key="group.cat">
               <div class="mb-4 flex items-center gap-3">
                 <div class="h-px flex-1 bg-ink-200" />
@@ -160,7 +202,27 @@ const deleteMenu = async () => {
               </div>
               <div class="space-y-4">
                 <div v-for="dish in group.dishes" :key="dish.nameEn" class="card">
-                  <p class="font-semibold text-ink-800">{{ dish.nameEn }}</p>
+                  <!-- 料理名: 単語ごとにタップ可能 -->
+                  <div class="flex items-start justify-between gap-2">
+                    <p class="font-semibold text-ink-800 leading-relaxed">
+                      <span
+                        v-for="(word, wi) in wordsOf(dish.nameEn)"
+                        :key="wi"
+                        class="cursor-pointer rounded px-0.5 transition-colors hover:bg-brand-50 hover:text-brand active:bg-brand-100"
+                        :class="{ 'bg-brand-50 text-brand': speaking === word.replace(/[,.:;!?]+$/g, '').trim() }"
+                        @click="speak(word)"
+                      >{{ word }} </span>
+                    </p>
+                    <!-- フル読み上げボタン -->
+                    <button
+                      class="flex-shrink-0 rounded-full p-1.5 text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-600"
+                      :class="{ 'bg-brand-50 text-brand': speaking === (dish.nameEn + '. ' + dish.descriptionEn).replace(/[,.:;!?]+$/g, '').trim() }"
+                      title="名前と説明を読み上げる"
+                      @click="speak(dish.nameEn + '. ' + dish.descriptionEn)"
+                    >
+                      <Icon name="volume_up" size="18" />
+                    </button>
+                  </div>
                   <p class="mt-1 text-sm italic leading-relaxed text-ink-500">
                     {{ dish.descriptionEn }}
                   </p>
@@ -177,6 +239,27 @@ const deleteMenu = async () => {
             >
               このメニューを削除する
             </button>
+          </div>
+
+          <!-- 用語モーダル -->
+          <div
+            v-if="selectedTerm"
+            class="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-8"
+            @click.self="selectedTerm = null"
+          >
+            <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+              <p class="mb-0.5 text-lg font-bold text-ink-800">
+                {{ selectedTerm.word }}
+              </p>
+              <p class="mb-3 text-sm text-ink-400">（{{ selectedTerm.reading }}）</p>
+              <p class="text-sm leading-relaxed text-ink-700">{{ selectedTerm.explanation }}</p>
+              <button
+                class="mt-5 w-full rounded-xl bg-ink-100 py-2.5 text-sm font-medium text-ink-700"
+                @click="selectedTerm = null"
+              >
+                閉じる
+              </button>
+            </div>
           </div>
 
           <!-- 削除確認モーダル -->
