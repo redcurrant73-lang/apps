@@ -5,7 +5,7 @@ icon: dining
 category: utility
 audience: private
 dataScope: per-user
-visibility: superuser_only
+visibility: assignable
 requiredApis:
   - gemini
   - storage

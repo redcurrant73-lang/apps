@@ -1,14 +1,15 @@
 import { db } from '~/server/utils/firestore'
+import { getKaisekiOwnerUid } from '../_ownerUid'
 
 export default defineEventHandler(async (event) => {
-  const decoded = await requireAuth(event)
+  await requireAppAccess(event, 'kaiseki')
   const id = getRouterParam(event, 'id') || ''
 
   if (!id) throw createError({ statusCode: 400, message: '不正なIDです' })
 
   const body = await readBody(event)
-
-  const docRef = db.doc(`apps/kaiseki/users/${decoded.uid}/menus/${id}`)
+  const ownerUid = await getKaisekiOwnerUid()
+  const docRef = db.doc(`apps/kaiseki/users/${ownerUid}/menus/${id}`)
   const doc = await docRef.get()
 
   if (!doc.exists) {

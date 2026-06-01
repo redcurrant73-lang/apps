@@ -1,10 +1,12 @@
 import { db } from '~/server/utils/firestore'
+import { getKaisekiOwnerUid } from './_ownerUid'
 
 export default defineEventHandler(async (event) => {
-  const decoded = await requireAuth(event)
+  await requireAppAccess(event, 'kaiseki')
+  const ownerUid = await getKaisekiOwnerUid()
 
   const snap = await db
-    .collection(`apps/kaiseki/users/${decoded.uid}/menus`)
+    .collection(`apps/kaiseki/users/${ownerUid}/menus`)
     .orderBy('createdAt', 'desc')
     .get()
 

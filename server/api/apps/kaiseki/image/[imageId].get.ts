@@ -1,17 +1,20 @@
 import { readImage } from '~/server/utils/storage'
+import { getKaisekiOwnerUid } from '../_ownerUid'
 
 export default defineEventHandler(async (event) => {
-  const decoded = await requireAuth(event)
+  await requireAppAccess(event, 'kaiseki')
   const imageId = getRouterParam(event, 'imageId') || ''
 
   if (!/^[A-Za-z0-9._-]+$/.test(imageId)) {
     throw createError({ statusCode: 400, message: '不正な画像IDです' })
   }
 
+  const ownerUid = await getKaisekiOwnerUid()
+
   try {
     const { buf, mimeType } = await readImage({
       appId: 'kaiseki',
-      uid: decoded.uid,
+      uid: ownerUid,
       imageId,
     })
     setResponseHeader(event, 'content-type', mimeType)
