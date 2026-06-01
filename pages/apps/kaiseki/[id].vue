@@ -240,7 +240,7 @@ const deleteMenu = async () => {
   <div class="flex min-h-dvh flex-col overflow-x-hidden">
     <AppHeader :title="menu?.title || '読み込み中…'" back="/apps/kaiseki" />
 
-    <main class="flex-1 px-4 py-4">
+    <main class="flex-1 overflow-x-hidden px-4 py-4">
       <div class="mx-auto max-w-2xl">
         <div v-if="loading" class="py-10 text-center text-ink-400">読み込み中…</div>
 
@@ -373,8 +373,8 @@ const deleteMenu = async () => {
               </div>
               <div class="space-y-4">
                 <div v-for="dish in group.dishes" :key="dish.nameEn" class="card">
-                  <div class="flex items-start justify-between gap-2">
-                    <p class="leading-relaxed font-semibold text-ink-800">
+                  <div class="flex min-w-0 items-start justify-between gap-2">
+                    <p class="min-w-0 flex-1 break-words font-semibold leading-relaxed text-ink-800">
                       <span
                         v-for="(word, wi) in wordsOf(dish.nameEn)"
                         :key="wi"
