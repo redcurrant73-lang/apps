@@ -7,17 +7,25 @@ export default defineEventHandler(async (event) => {
   if (!id) throw createError({ statusCode: 400, message: '不正なIDです' })
 
   const body = await readBody(event)
-  const { dishIndex, nameJa, reading, descriptionJa } = body ?? {}
-
-  if (typeof dishIndex !== 'number') {
-    throw createError({ statusCode: 400, message: '料理のインデックスが必要です' })
-  }
 
   const docRef = db.doc(`apps/kaiseki/users/${decoded.uid}/menus/${id}`)
   const doc = await docRef.get()
 
   if (!doc.exists) {
     throw createError({ statusCode: 404, message: 'メニューが見つかりません' })
+  }
+
+  // カテゴリー順の更新
+  if (Array.isArray(body?.categoryOrder)) {
+    await docRef.update({ categoryOrder: body.categoryOrder })
+    return { ok: true }
+  }
+
+  // 料理情報の更新
+  const { dishIndex, nameJa, reading, descriptionJa } = body ?? {}
+
+  if (typeof dishIndex !== 'number') {
+    throw createError({ statusCode: 400, message: '料理のインデックスが必要です' })
   }
 
   const dishes: any[] = [...(doc.data()?.dishes || [])]
