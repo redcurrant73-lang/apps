@@ -45,6 +45,49 @@ const imageUrl = ref('')
 const selectedTerm = ref<Term | null>(null)
 const speaking = ref('')
 
+interface EditForm {
+  nameJa: string
+  reading: string
+  descriptionJa: string
+}
+const editingDish = ref<{ dish: Dish; index: number } | null>(null)
+const editForm = ref<EditForm>({ nameJa: '', reading: '', descriptionJa: '' })
+const saving = ref(false)
+const saveError = ref('')
+
+const startEdit = (dish: Dish) => {
+  const index = menu.value!.dishes.indexOf(dish)
+  editingDish.value = { dish, index }
+  editForm.value = { nameJa: dish.nameJa, reading: dish.reading, descriptionJa: dish.descriptionJa }
+  saveError.value = ''
+}
+
+const saveEdit = async () => {
+  if (!menu.value || !editingDish.value) return
+  saving.value = true
+  saveError.value = ''
+  try {
+    await $api(`/api/apps/kaiseki/menus/${menu.value.id}`, {
+      method: 'PATCH',
+      body: {
+        dishIndex: editingDish.value.index,
+        nameJa: editForm.value.nameJa,
+        reading: editForm.value.reading,
+        descriptionJa: editForm.value.descriptionJa,
+      },
+    })
+    const dish = editingDish.value.dish
+    dish.nameJa = editForm.value.nameJa
+    dish.reading = editForm.value.reading
+    dish.descriptionJa = editForm.value.descriptionJa
+    editingDish.value = null
+  } catch (e: any) {
+    saveError.value = e?.data?.message || '保存に失敗しました'
+  } finally {
+    saving.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     menu.value = await $api(`/api/apps/kaiseki/menus/${route.params.id}`)
@@ -163,8 +206,14 @@ const deleteMenu = async () => {
                 {{ group.cat }}
               </h2>
               <div class="space-y-3">
-                <div v-for="dish in group.dishes" :key="dish.nameJa" class="card">
-                  <p class="font-medium text-ink-800">
+                <div v-for="dish in group.dishes" :key="dish.nameJa" class="card relative">
+                  <button
+                    class="absolute right-3 top-3 rounded-full p-1 text-ink-300 hover:bg-ink-100 hover:text-ink-500"
+                    @click="startEdit(dish)"
+                  >
+                    <Icon name="edit" size="16" />
+                  </button>
+                  <p class="pr-7 font-medium text-ink-800">
                     {{ dish.nameJa
                     }}<span class="ml-1.5 text-sm font-normal text-ink-400"
                       >（{{ dish.reading }}）</span
@@ -239,6 +288,47 @@ const deleteMenu = async () => {
             >
               このメニューを削除する
             </button>
+          </div>
+
+          <!-- 編集モーダル -->
+          <div
+            v-if="editingDish"
+            class="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-8"
+            @click.self="editingDish = null"
+          >
+            <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+              <h3 class="mb-4 font-semibold text-ink-800">料理情報を修正</h3>
+              <div class="space-y-3">
+                <div>
+                  <label class="mb-1 block text-xs text-ink-500">料理名</label>
+                  <input v-model="editForm.nameJa" class="field w-full" />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs text-ink-500">読み方（ひらがな）</label>
+                  <input v-model="editForm.reading" class="field w-full" placeholder="ひらがなで入力" />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs text-ink-500">解説</label>
+                  <textarea v-model="editForm.descriptionJa" class="field w-full" rows="3" />
+                </div>
+              </div>
+              <p v-if="saveError" class="mt-2 text-xs text-red-500">{{ saveError }}</p>
+              <div class="mt-5 flex gap-3">
+                <button
+                  class="flex-1 rounded-xl border border-ink-200 py-2.5 text-sm text-ink-700"
+                  @click="editingDish = null"
+                >
+                  キャンセル
+                </button>
+                <button
+                  class="btn-primary flex-1 py-2.5 text-sm disabled:opacity-50"
+                  :disabled="saving"
+                  @click="saveEdit"
+                >
+                  {{ saving ? '保存中…' : '保存する' }}
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- 用語モーダル -->
