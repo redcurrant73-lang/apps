@@ -237,7 +237,7 @@ const deleteMenu = async () => {
 </script>
 
 <template>
-  <div class="flex min-h-dvh flex-col">
+  <div class="flex min-h-dvh flex-col overflow-x-hidden">
     <AppHeader :title="menu?.title || '読み込み中…'" back="/apps/kaiseki" />
 
     <main class="flex-1 px-4 py-4">

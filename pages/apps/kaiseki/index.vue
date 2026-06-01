@@ -127,7 +127,7 @@ const formatDate = (iso: string) => {
 </script>
 
 <template>
-  <div class="flex min-h-dvh flex-col">
+  <div class="flex min-h-dvh flex-col overflow-x-hidden">
     <AppHeader title="懐石メニュー" back="/" />
 
     <main class="flex-1 px-4 py-4">
