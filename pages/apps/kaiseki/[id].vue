@@ -110,6 +110,27 @@ onBeforeUnmount(() => {
   if ('speechSynthesis' in window) window.speechSynthesis.cancel()
 })
 
+const KAISEKI_ORDER = [
+  '先付', '八寸', '前八寸', 'お椀', '椀物', '向付', 'お造り',
+  '焼物', '焼き物', '煮物', '揚物', '揚げ物', '蒸物', '蒸し物',
+  '御飯', '食事', '水物', '水菓子', '甘味',
+]
+const EN_ORDER = [
+  'Amuse-Bouche', 'Appetizer', 'Soup', 'Sashimi', 'Grilled',
+  'Simmered', 'Fried', 'Steamed', 'Rice Course', 'Seasonal Fruits', 'Dessert',
+]
+
+function sortByOrder(entries: { cat: string; dishes: Dish[] }[], order: string[]) {
+  return entries.sort((a, b) => {
+    const ia = order.indexOf(a.cat)
+    const ib = order.indexOf(b.cat)
+    if (ia === -1 && ib === -1) return 0
+    if (ia === -1) return 1
+    if (ib === -1) return -1
+    return ia - ib
+  })
+}
+
 const groupedJa = computed(() => {
   if (!menu.value) return []
   const map = new Map<string, Dish[]>()
@@ -118,7 +139,7 @@ const groupedJa = computed(() => {
     if (!map.has(cat)) map.set(cat, [])
     map.get(cat)!.push(d)
   }
-  return [...map.entries()].map(([cat, dishes]) => ({ cat, dishes }))
+  return sortByOrder([...map.entries()].map(([cat, dishes]) => ({ cat, dishes })), KAISEKI_ORDER)
 })
 
 const groupedEn = computed(() => {
@@ -129,7 +150,7 @@ const groupedEn = computed(() => {
     if (!map.has(cat)) map.set(cat, [])
     map.get(cat)!.push(d)
   }
-  return [...map.entries()].map(([cat, dishes]) => ({ cat, dishes }))
+  return sortByOrder([...map.entries()].map(([cat, dishes]) => ({ cat, dishes })), EN_ORDER)
 })
 
 const speak = (text: string) => {
