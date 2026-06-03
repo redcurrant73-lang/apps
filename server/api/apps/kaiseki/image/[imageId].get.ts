@@ -2,7 +2,6 @@ import { readImage } from '~/server/utils/storage'
 import { getKaisekiOwnerUid } from '../_ownerUid'
 
 export default defineEventHandler(async (event) => {
-  await requireAppAccess(event, 'kaiseki')
   const imageId = getRouterParam(event, 'imageId') || ''
 
   if (!/^[A-Za-z0-9._-]+$/.test(imageId)) {

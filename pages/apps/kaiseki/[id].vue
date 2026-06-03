@@ -1,15 +1,11 @@
 <script setup lang="ts">
+import QRCode from 'qrcode'
+
 const { $api } = useNuxtApp() as any
 const { ready, user } = useAuth()
 const route = useRoute()
 
-watch(
-  [ready, user],
-  () => {
-    if (ready.value && !user.value) navigateTo('/login')
-  },
-  { immediate: true },
-)
+const isLoggedIn = computed(() => ready.value && !!user.value)
 
 interface Term {
   word: string
@@ -39,6 +35,7 @@ interface Menu {
 
 const menu = ref<Menu | null>(null)
 const loading = ref(true)
+const loadError = ref(false)
 const lang = ref<'ja' | 'en'>('ja')
 const deleting = ref(false)
 const showDeleteConfirm = ref(false)
@@ -47,6 +44,8 @@ const selectedTerm = ref<Term | null>(null)
 const speaking = ref('')
 const saving = ref(false)
 const saveError = ref('')
+const showQR = ref(false)
+const qrDataUrl = ref('')
 
 // ---- 料理編集 ----
 interface EditForm { nameJa: string; reading: string; descriptionJa: string }
@@ -183,14 +182,16 @@ onMounted(async () => {
   try {
     menu.value = await $api(`/api/apps/kaiseki/menus/${route.params.id}`)
     if (menu.value?.imageId) {
-      const blob = await $api(
-        `/api/apps/kaiseki/image/${encodeURIComponent(menu.value.imageId)}`,
-        { responseType: 'blob' },
-      )
-      imageUrl.value = URL.createObjectURL(blob as Blob)
+      try {
+        const blob = await $api(
+          `/api/apps/kaiseki/image/${encodeURIComponent(menu.value.imageId)}`,
+          { responseType: 'blob' },
+        )
+        imageUrl.value = URL.createObjectURL(blob as Blob)
+      } catch {}
     }
   } catch {
-    navigateTo('/apps/kaiseki')
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -222,6 +223,17 @@ const speak = (text: string) => {
 
 const wordsOf = (text: string) => text.split(' ').filter(Boolean)
 
+// ---- QRコード ----
+const openQR = async () => {
+  const url = window.location.href
+  qrDataUrl.value = await QRCode.toDataURL(url, {
+    width: 256,
+    margin: 2,
+    color: { dark: '#1a1a1a', light: '#ffffff' },
+  })
+  showQR.value = true
+}
+
 // ---- 削除 ----
 const deleteMenu = async () => {
   if (!menu.value) return
@@ -238,11 +250,15 @@ const deleteMenu = async () => {
 
 <template>
   <div class="flex min-h-dvh flex-col overflow-x-hidden">
-    <AppHeader :title="menu?.title || '読み込み中…'" back="/apps/kaiseki" />
+    <AppHeader :title="menu?.title || '懐石メニュー'" back="/apps/kaiseki" />
 
-    <main class="flex-1 overflow-x-hidden px-4 py-4">
+    <main class="flex-1 overflow-x-hidden px-4 pb-28 pt-4">
       <div class="mx-auto max-w-2xl">
         <div v-if="loading" class="py-10 text-center text-ink-400">読み込み中…</div>
+
+        <div v-else-if="loadError" class="py-10 text-center text-ink-400">
+          メニューが見つかりませんでした
+        </div>
 
         <template v-else-if="menu">
           <!-- お品書き写真 -->
@@ -250,28 +266,21 @@ const deleteMenu = async () => {
             <img :src="imageUrl" class="max-h-64 w-full object-cover" alt="お品書き" />
           </div>
 
-          <!-- 言語切替 -->
-          <div class="mb-6 flex overflow-hidden rounded-xl border border-ink-100">
+          <!-- QRコードボタン (ログイン時のみ) -->
+          <div v-if="isLoggedIn" class="mb-4 flex justify-end">
             <button
-              class="flex-1 py-2.5 text-sm font-medium transition-colors"
-              :class="lang === 'ja' ? 'bg-brand text-white' : 'text-ink-600 hover:bg-ink-50'"
-              @click="lang = 'ja'"
+              class="flex items-center gap-1.5 rounded-xl bg-ink-100 px-3 py-2 text-xs font-medium text-ink-600 hover:bg-ink-200"
+              @click="openQR"
             >
-              日本語
-            </button>
-            <button
-              class="flex-1 py-2.5 text-sm font-medium transition-colors"
-              :class="lang === 'en' ? 'bg-brand text-white' : 'text-ink-600 hover:bg-ink-50'"
-              @click="lang = 'en'"
-            >
-              English
+              <Icon name="qr_code_2" size="16" />
+              QRコード
             </button>
           </div>
 
           <!-- 日本語表示 -->
           <div v-if="lang === 'ja'">
-            <!-- 並べ替えバー -->
-            <div class="mb-4 flex items-center justify-end gap-3">
+            <!-- 並べ替えバー (ログイン時のみ) -->
+            <div v-if="isLoggedIn" class="mb-4 flex items-center justify-end gap-3">
               <template v-if="!reorderMode">
                 <button
                   class="flex items-center gap-1 text-xs text-ink-400 hover:text-ink-600"
@@ -329,12 +338,13 @@ const deleteMenu = async () => {
                 <div class="space-y-3">
                   <div v-for="dish in group.dishes" :key="dish.nameJa" class="card relative">
                     <button
+                      v-if="isLoggedIn"
                       class="absolute right-3 top-3 rounded-full p-1 text-ink-300 hover:bg-ink-100 hover:text-ink-500"
                       @click="startEdit(dish)"
                     >
                       <Icon name="edit" size="16" />
                     </button>
-                    <p class="pr-7 font-medium text-ink-800">
+                    <p :class="isLoggedIn ? 'pr-7' : ''" class="font-medium text-ink-800">
                       {{ dish.nameJa
                       }}<span class="ml-1.5 text-sm font-normal text-ink-400"
                         >（{{ dish.reading }}）</span
@@ -399,101 +409,195 @@ const deleteMenu = async () => {
             </div>
           </div>
 
-          <!-- 削除 -->
-          <div class="mt-10 border-t border-ink-100 pt-4">
+          <!-- 削除 (ログイン時のみ) -->
+          <div v-if="isLoggedIn" class="mt-10 border-t border-ink-100 pt-4">
             <button class="text-sm text-red-400 hover:text-red-600" @click="showDeleteConfirm = true">
               このメニューを削除する
             </button>
           </div>
-
-          <!-- 編集モーダル -->
-          <div
-            v-if="editingDish"
-            class="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-8"
-            @click.self="editingDish = null"
-          >
-            <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-              <h3 class="mb-4 font-semibold text-ink-800">料理情報を修正</h3>
-              <div class="space-y-3">
-                <div>
-                  <label class="mb-1 block text-xs text-ink-500">料理名</label>
-                  <input v-model="editForm.nameJa" class="field w-full" />
-                </div>
-                <div>
-                  <label class="mb-1 block text-xs text-ink-500">読み方（ひらがな）</label>
-                  <input v-model="editForm.reading" class="field w-full" placeholder="ひらがなで入力" />
-                </div>
-                <div>
-                  <label class="mb-1 block text-xs text-ink-500">解説</label>
-                  <textarea v-model="editForm.descriptionJa" class="field w-full" rows="3" />
-                </div>
-              </div>
-              <p v-if="saveError" class="mt-2 text-xs text-red-500">{{ saveError }}</p>
-              <div class="mt-5 flex gap-3">
-                <button
-                  class="flex-1 rounded-xl border border-ink-200 py-2.5 text-sm text-ink-700"
-                  @click="editingDish = null"
-                >
-                  キャンセル
-                </button>
-                <button
-                  class="btn-primary flex-1 py-2.5 text-sm disabled:opacity-50"
-                  :disabled="saving"
-                  @click="saveEdit"
-                >
-                  {{ saving ? '保存中…' : '保存する' }}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 用語モーダル -->
-          <div
-            v-if="selectedTerm"
-            class="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-8"
-            @click.self="selectedTerm = null"
-          >
-            <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-              <p class="mb-0.5 text-lg font-bold text-ink-800">{{ selectedTerm.word }}</p>
-              <p class="mb-3 text-sm text-ink-400">（{{ selectedTerm.reading }}）</p>
-              <p class="text-sm leading-relaxed text-ink-700">{{ selectedTerm.explanation }}</p>
-              <button
-                class="mt-5 w-full rounded-xl bg-ink-100 py-2.5 text-sm font-medium text-ink-700"
-                @click="selectedTerm = null"
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-
-          <!-- 削除確認モーダル -->
-          <div
-            v-if="showDeleteConfirm"
-            class="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-8"
-            @click.self="showDeleteConfirm = false"
-          >
-            <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-              <p class="mb-2 font-medium text-ink-800">このメニューを削除してもいいですか？</p>
-              <p class="mb-6 text-sm text-ink-500">写真と解析データが削除されます。元に戻せません。</p>
-              <div class="flex gap-3">
-                <button
-                  class="flex-1 rounded-xl border border-ink-200 py-2.5 text-sm text-ink-700"
-                  @click="showDeleteConfirm = false"
-                >
-                  キャンセル
-                </button>
-                <button
-                  class="flex-1 rounded-xl bg-red-500 py-2.5 text-sm text-white disabled:opacity-50"
-                  :disabled="deleting"
-                  @click="deleteMenu"
-                >
-                  {{ deleting ? '削除中…' : '削除する' }}
-                </button>
-              </div>
-            </div>
-          </div>
         </template>
       </div>
     </main>
+
+    <!-- 言語切替（画面下部固定） -->
+    <div
+      class="fixed bottom-0 left-0 right-0 z-30 border-t border-ink-100 bg-white px-4 pt-3"
+      style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))"
+    >
+      <div class="mx-auto flex max-w-2xl overflow-hidden rounded-xl border border-ink-100">
+        <button
+          class="flex-1 py-2.5 text-sm font-medium transition-colors"
+          :class="lang === 'ja' ? 'bg-brand text-white' : 'text-ink-600 hover:bg-ink-50'"
+          @click="lang = 'ja'"
+        >
+          日本語
+        </button>
+        <button
+          class="flex-1 py-2.5 text-sm font-medium transition-colors"
+          :class="lang === 'en' ? 'bg-brand text-white' : 'text-ink-600 hover:bg-ink-50'"
+          @click="lang = 'en'"
+        >
+          English
+        </button>
+      </div>
+    </div>
+
+    <!-- モーダル：用語 -->
+    <Transition name="fade">
+      <div
+        v-if="selectedTerm"
+        class="fixed inset-0 z-50 bg-black/40"
+        @click="selectedTerm = null"
+      />
+    </Transition>
+    <Transition name="slide-up">
+      <div
+        v-if="selectedTerm"
+        class="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white px-6 pt-6 shadow-xl"
+        style="padding-bottom: max(1.5rem, env(safe-area-inset-bottom))"
+      >
+        <p class="mb-0.5 text-lg font-bold text-ink-800">{{ selectedTerm.word }}</p>
+        <p class="mb-3 text-sm text-ink-400">（{{ selectedTerm.reading }}）</p>
+        <p class="text-sm leading-relaxed text-ink-700">{{ selectedTerm.explanation }}</p>
+        <button
+          class="mt-5 w-full rounded-xl bg-ink-100 py-2.5 text-sm font-medium text-ink-700"
+          @click="selectedTerm = null"
+        >
+          閉じる
+        </button>
+      </div>
+    </Transition>
+
+    <!-- モーダル：料理編集 -->
+    <Transition name="fade">
+      <div
+        v-if="editingDish"
+        class="fixed inset-0 z-50 bg-black/40"
+        @click="editingDish = null"
+      />
+    </Transition>
+    <Transition name="slide-up">
+      <div
+        v-if="editingDish"
+        class="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white px-6 pt-6 shadow-xl"
+        style="padding-bottom: max(1.5rem, env(safe-area-inset-bottom))"
+      >
+        <h3 class="mb-4 font-semibold text-ink-800">料理情報を修正</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="mb-1 block text-xs text-ink-500">料理名</label>
+            <input v-model="editForm.nameJa" class="field w-full" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs text-ink-500">読み方（ひらがな）</label>
+            <input v-model="editForm.reading" class="field w-full" placeholder="ひらがなで入力" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs text-ink-500">解説</label>
+            <textarea v-model="editForm.descriptionJa" class="field w-full" rows="3" />
+          </div>
+        </div>
+        <p v-if="saveError" class="mt-2 text-xs text-red-500">{{ saveError }}</p>
+        <div class="mt-5 flex gap-3">
+          <button
+            class="flex-1 rounded-xl border border-ink-200 py-2.5 text-sm text-ink-700"
+            @click="editingDish = null"
+          >
+            キャンセル
+          </button>
+          <button
+            class="btn-primary flex-1 py-2.5 text-sm disabled:opacity-50"
+            :disabled="saving"
+            @click="saveEdit"
+          >
+            {{ saving ? '保存中…' : '保存する' }}
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- モーダル：削除確認 -->
+    <Transition name="fade">
+      <div
+        v-if="showDeleteConfirm"
+        class="fixed inset-0 z-50 bg-black/40"
+        @click="showDeleteConfirm = false"
+      />
+    </Transition>
+    <Transition name="slide-up">
+      <div
+        v-if="showDeleteConfirm"
+        class="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white px-6 pt-6 shadow-xl"
+        style="padding-bottom: max(1.5rem, env(safe-area-inset-bottom))"
+      >
+        <p class="mb-2 font-medium text-ink-800">このメニューを削除してもいいですか？</p>
+        <p class="mb-6 text-sm text-ink-500">写真と解析データが削除されます。元に戻せません。</p>
+        <div class="flex gap-3">
+          <button
+            class="flex-1 rounded-xl border border-ink-200 py-2.5 text-sm text-ink-700"
+            @click="showDeleteConfirm = false"
+          >
+            キャンセル
+          </button>
+          <button
+            class="flex-1 rounded-xl bg-red-500 py-2.5 text-sm text-white disabled:opacity-50"
+            :disabled="deleting"
+            @click="deleteMenu"
+          >
+            {{ deleting ? '削除中…' : '削除する' }}
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- モーダル：QRコード -->
+    <Transition name="fade">
+      <div
+        v-if="showQR"
+        class="fixed inset-0 z-50 bg-black/40"
+        @click="showQR = false"
+      />
+    </Transition>
+    <Transition name="slide-up">
+      <div
+        v-if="showQR"
+        class="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white px-6 pt-6 shadow-xl"
+        style="padding-bottom: max(1.5rem, env(safe-area-inset-bottom))"
+      >
+        <h3 class="mb-4 text-center font-semibold text-ink-800">QRコード</h3>
+        <div class="flex justify-center">
+          <img v-if="qrDataUrl" :src="qrDataUrl" alt="QR Code" class="h-48 w-48 rounded-xl" />
+        </div>
+        <p class="mt-3 text-center text-xs leading-relaxed text-ink-400">
+          スクリーンショットして印刷すると<br />お客様がスマホで読み取れます
+        </p>
+        <button
+          class="mt-5 w-full rounded-xl bg-ink-100 py-2.5 text-sm font-medium text-ink-700"
+          @click="showQR = false"
+        >
+          閉じる
+        </button>
+      </div>
+    </Transition>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(100%);
+}
+</style>

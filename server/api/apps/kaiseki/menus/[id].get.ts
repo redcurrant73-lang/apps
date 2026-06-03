@@ -2,7 +2,6 @@ import { db, serializeDoc } from '~/server/utils/firestore'
 import { getKaisekiOwnerUid } from '../_ownerUid'
 
 export default defineEventHandler(async (event) => {
-  await requireAppAccess(event, 'kaiseki')
   const id = getRouterParam(event, 'id') || ''
 
   if (!id) throw createError({ statusCode: 400, message: '不正なIDです' })
