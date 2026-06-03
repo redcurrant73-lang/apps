@@ -46,6 +46,7 @@ const saving = ref(false)
 const saveError = ref('')
 const showQR = ref(false)
 const qrDataUrl = ref('')
+const showImageViewer = ref(false)
 
 // ---- 料理編集 ----
 interface EditForm { nameJa: string; reading: string; descriptionJa: string }
@@ -261,8 +262,12 @@ const deleteMenu = async () => {
         </div>
 
         <template v-else-if="menu">
-          <!-- お品書き写真 -->
-          <div v-if="imageUrl" class="mb-4 overflow-hidden rounded-2xl shadow-sm">
+          <!-- お品書き写真（タップで拡大） -->
+          <div
+            v-if="imageUrl"
+            class="mb-4 cursor-zoom-in overflow-hidden rounded-2xl shadow-sm"
+            @click="showImageViewer = true"
+          >
             <img :src="imageUrl" class="max-h-64 w-full object-cover" alt="お品書き" />
           </div>
 
@@ -546,6 +551,31 @@ const deleteMenu = async () => {
           >
             {{ deleting ? '削除中…' : '削除する' }}
           </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 写真ビューアー（フルスクリーン） -->
+    <Transition name="fade">
+      <div
+        v-if="showImageViewer"
+        class="fixed inset-0 z-50 overflow-auto bg-black"
+        @click="showImageViewer = false"
+      >
+        <button
+          class="absolute right-4 z-10 rounded-full bg-black/60 p-2 text-white"
+          style="top: max(1rem, env(safe-area-inset-top))"
+          @click.stop="showImageViewer = false"
+        >
+          <Icon name="close" size="24" />
+        </button>
+        <div class="flex min-h-full items-center justify-center p-4">
+          <img
+            :src="imageUrl"
+            class="max-w-full rounded-lg"
+            alt="お品書き"
+            @click.stop
+          />
         </div>
       </div>
     </Transition>
