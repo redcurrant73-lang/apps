@@ -11,6 +11,7 @@ interface Term {
   word: string
   reading: string
   explanation: string
+  explanationEn?: string
 }
 
 interface Dish {
@@ -269,7 +270,7 @@ const saveTermEdit = async () => {
   saving.value = true
   termSaveError.value = ''
   try {
-    await $api(`/api/apps/kaiseki/menus/${menu.value.id}`, {
+    const result = await $api(`/api/apps/kaiseki/menus/${menu.value.id}`, {
       method: 'PATCH',
       body: {
         dishIndex: selectedTermCtx.value.dishIndex,
@@ -281,8 +282,12 @@ const saveTermEdit = async () => {
     })
     const dish = menu.value.dishes[selectedTermCtx.value.dishIndex]
     if (dish.terms) {
-      dish.terms[selectedTermCtx.value.termIndex] = { ...termEditForm.value }
-      selectedTermCtx.value = { ...selectedTermCtx.value, term: { ...termEditForm.value } }
+      const updated = {
+        ...termEditForm.value,
+        explanationEn: result?.explanationEn || dish.terms[selectedTermCtx.value.termIndex].explanationEn || '',
+      }
+      dish.terms[selectedTermCtx.value.termIndex] = updated
+      selectedTermCtx.value = { ...selectedTermCtx.value, term: updated }
     }
     termEditMode.value = false
   } catch (e: any) {
@@ -565,7 +570,9 @@ const deleteMenu = async () => {
               <Icon name="edit" size="18" />
             </button>
           </div>
-          <p class="text-sm leading-relaxed text-ink-700">{{ selectedTermCtx.term.explanation }}</p>
+          <p class="text-sm leading-relaxed text-ink-700">
+            {{ (lang === 'en' && selectedTermCtx.term.explanationEn) ? selectedTermCtx.term.explanationEn : selectedTermCtx.term.explanation }}
+          </p>
           <button
             class="mt-5 w-full rounded-xl bg-ink-100 py-2.5 text-sm font-medium text-ink-700"
             @click="closeTermModal"
