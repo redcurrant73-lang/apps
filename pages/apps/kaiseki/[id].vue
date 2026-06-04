@@ -47,6 +47,50 @@ const saveError = ref('')
 const showQR = ref(false)
 const qrDataUrl = ref('')
 const showImageViewer = ref(false)
+const viewerScale = ref(1)
+const viewerTranslate = ref({ x: 0, y: 0 })
+let _pinch: { dist: number; scale: number } | null = null
+let _pan: { x: number; y: number; tx: number; ty: number } | null = null
+
+const closeViewer = () => {
+  showImageViewer.value = false
+  viewerScale.value = 1
+  viewerTranslate.value = { x: 0, y: 0 }
+}
+
+const onImgTouchStart = (e: TouchEvent) => {
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX
+    const dy = e.touches[0].clientY - e.touches[1].clientY
+    _pinch = { dist: Math.hypot(dx, dy), scale: viewerScale.value }
+    _pan = null
+  } else if (e.touches.length === 1) {
+    _pinch = null
+    _pan = { x: e.touches[0].clientX, y: e.touches[0].clientY, tx: viewerTranslate.value.x, ty: viewerTranslate.value.y }
+  }
+}
+
+const onImgTouchMove = (e: TouchEvent) => {
+  if (e.touches.length === 2 && _pinch) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX
+    const dy = e.touches[0].clientY - e.touches[1].clientY
+    viewerScale.value = Math.min(Math.max(_pinch.scale * (Math.hypot(dx, dy) / _pinch.dist), 1), 5)
+  } else if (e.touches.length === 1 && _pan && viewerScale.value > 1) {
+    viewerTranslate.value = {
+      x: _pan.tx + (e.touches[0].clientX - _pan.x),
+      y: _pan.ty + (e.touches[0].clientY - _pan.y),
+    }
+  }
+}
+
+const onImgTouchEnd = () => {
+  if (viewerScale.value <= 1.05) {
+    viewerScale.value = 1
+    viewerTranslate.value = { x: 0, y: 0 }
+  }
+  _pinch = null
+  _pan = null
+}
 
 // ---- 料理編集 ----
 interface EditForm { nameJa: string; reading: string; descriptionJa: string }
@@ -555,28 +599,34 @@ const deleteMenu = async () => {
       </div>
     </Transition>
 
-    <!-- 写真ビューアー（フルスクリーン） -->
+    <!-- 写真ビューアー（ピンチで拡大縮小・1本指でパン） -->
     <Transition name="fade">
       <div
         v-if="showImageViewer"
-        class="fixed inset-0 z-50 overflow-auto bg-black"
-        @click="showImageViewer = false"
+        class="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black"
+        @click="closeViewer"
       >
         <button
           class="absolute right-4 z-10 rounded-full bg-black/60 p-2 text-white"
           style="top: max(1rem, env(safe-area-inset-top))"
-          @click.stop="showImageViewer = false"
+          @click.stop="closeViewer"
         >
           <Icon name="close" size="24" />
         </button>
-        <div class="flex min-h-full items-center justify-center p-4">
-          <img
-            :src="imageUrl"
-            class="max-w-full rounded-lg"
-            alt="お品書き"
-            @click.stop
-          />
-        </div>
+        <img
+          :src="imageUrl"
+          class="max-h-full max-w-full object-contain"
+          :style="{
+            transform: `translate(${viewerTranslate.x}px, ${viewerTranslate.y}px) scale(${viewerScale})`,
+            transition: viewerScale === 1 ? 'transform 0.2s ease' : 'none',
+            willChange: 'transform',
+          }"
+          alt="お品書き"
+          @click.stop
+          @touchstart="onImgTouchStart"
+          @touchmove.prevent="onImgTouchMove"
+          @touchend="onImgTouchEnd"
+        />
       </div>
     </Transition>
 
