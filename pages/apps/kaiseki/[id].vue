@@ -503,6 +503,18 @@ const deleteMenu = async () => {
                   <p class="mt-1 text-sm italic leading-relaxed text-ink-500">
                     {{ dish.descriptionEn }}
                   </p>
+                  <!-- 用語チップ（英語訳がある用語のみ） -->
+                  <div v-if="dish.terms?.some(t => t.explanationEn)" class="mt-2.5 flex flex-wrap gap-1.5">
+                    <template v-for="(term, ti) in dish.terms" :key="term.word">
+                      <button
+                        v-if="term.explanationEn"
+                        class="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100 active:bg-brand-200"
+                        @click="selectedTermCtx = { term, dishIndex: menu!.dishes.indexOf(dish), termIndex: ti }"
+                      >
+                        {{ term.word }}
+                      </button>
+                    </template>
+                  </div>
                 </div>
               </div>
             </div>
@@ -611,7 +623,7 @@ const deleteMenu = async () => {
               :disabled="saving"
               @click="saveTermEdit"
             >
-              {{ saving ? '保存中…' : '保存する' }}
+              {{ saving ? 'AI翻訳中…' : '保存する' }}
             </button>
           </div>
         </template>
