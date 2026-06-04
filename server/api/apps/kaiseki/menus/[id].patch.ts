@@ -35,6 +35,25 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: '不正な料理インデックスです' })
   }
 
+  // 用語の更新
+  if (typeof body?.termIndex === 'number') {
+    const { termIndex, word, explanation } = body
+    const terms = [...(dishes[dishIndex].terms || [])]
+    if (termIndex < 0 || termIndex >= terms.length) {
+      throw createError({ statusCode: 400, message: '不正な用語インデックスです' })
+    }
+    terms[termIndex] = {
+      ...terms[termIndex],
+      ...(typeof word === 'string' ? { word } : {}),
+      ...(typeof reading === 'string' ? { reading } : {}),
+      ...(typeof explanation === 'string' ? { explanation } : {}),
+    }
+    dishes[dishIndex] = { ...dishes[dishIndex], terms }
+    await docRef.update({ dishes })
+    return { ok: true }
+  }
+
+  // 料理情報の更新
   dishes[dishIndex] = {
     ...dishes[dishIndex],
     ...(typeof nameJa === 'string' ? { nameJa } : {}),

@@ -40,7 +40,11 @@ const lang = ref<'ja' | 'en'>('ja')
 const deleting = ref(false)
 const showDeleteConfirm = ref(false)
 const imageUrl = ref('')
-const selectedTerm = ref<Term | null>(null)
+interface TermCtx { term: Term; dishIndex: number; termIndex: number }
+const selectedTermCtx = ref<TermCtx | null>(null)
+const termEditMode = ref(false)
+const termEditForm = ref({ word: '', reading: '', explanation: '' })
+const termSaveError = ref('')
 const speaking = ref('')
 const saving = ref(false)
 const saveError = ref('')
@@ -247,6 +251,47 @@ onBeforeUnmount(() => {
   if ('speechSynthesis' in window) window.speechSynthesis.cancel()
 })
 
+// ---- 用語編集 ----
+const closeTermModal = () => {
+  selectedTermCtx.value = null
+  termEditMode.value = false
+}
+
+const startTermEdit = () => {
+  if (!selectedTermCtx.value) return
+  termEditForm.value = { ...selectedTermCtx.value.term }
+  termEditMode.value = true
+  termSaveError.value = ''
+}
+
+const saveTermEdit = async () => {
+  if (!menu.value || !selectedTermCtx.value) return
+  saving.value = true
+  termSaveError.value = ''
+  try {
+    await $api(`/api/apps/kaiseki/menus/${menu.value.id}`, {
+      method: 'PATCH',
+      body: {
+        dishIndex: selectedTermCtx.value.dishIndex,
+        termIndex: selectedTermCtx.value.termIndex,
+        word: termEditForm.value.word,
+        reading: termEditForm.value.reading,
+        explanation: termEditForm.value.explanation,
+      },
+    })
+    const dish = menu.value.dishes[selectedTermCtx.value.dishIndex]
+    if (dish.terms) {
+      dish.terms[selectedTermCtx.value.termIndex] = { ...termEditForm.value }
+      selectedTermCtx.value = { ...selectedTermCtx.value, term: { ...termEditForm.value } }
+    }
+    termEditMode.value = false
+  } catch (e: any) {
+    termSaveError.value = e?.data?.message || '保存に失敗しました'
+  } finally {
+    saving.value = false
+  }
+}
+
 // ---- 英語発音 ----
 const speak = (text: string) => {
   if (!('speechSynthesis' in window)) return
@@ -405,10 +450,10 @@ const deleteMenu = async () => {
                     <!-- 用語チップ -->
                     <div v-if="dish.terms?.length" class="mt-2.5 flex flex-wrap gap-1.5">
                       <button
-                        v-for="term in dish.terms"
+                        v-for="(term, ti) in dish.terms"
                         :key="term.word"
                         class="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100 active:bg-brand-200"
-                        @click="selectedTerm = term"
+                        @click="selectedTermCtx = { term, dishIndex: menu!.dishes.indexOf(dish), termIndex: ti }"
                       >
                         {{ term.word }} とは？
                       </button>
@@ -494,26 +539,75 @@ const deleteMenu = async () => {
     <!-- モーダル：用語 -->
     <Transition name="fade">
       <div
-        v-if="selectedTerm"
+        v-if="selectedTermCtx"
         class="fixed inset-0 z-50 bg-black/40"
-        @click="selectedTerm = null"
+        @click="closeTermModal"
       />
     </Transition>
     <Transition name="slide-up">
       <div
-        v-if="selectedTerm"
+        v-if="selectedTermCtx"
         class="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white px-6 pt-6 shadow-xl"
         style="padding-bottom: max(1.5rem, env(safe-area-inset-bottom))"
       >
-        <p class="mb-0.5 text-lg font-bold text-ink-800">{{ selectedTerm.word }}</p>
-        <p class="mb-3 text-sm text-ink-400">（{{ selectedTerm.reading }}）</p>
-        <p class="text-sm leading-relaxed text-ink-700">{{ selectedTerm.explanation }}</p>
-        <button
-          class="mt-5 w-full rounded-xl bg-ink-100 py-2.5 text-sm font-medium text-ink-700"
-          @click="selectedTerm = null"
-        >
-          閉じる
-        </button>
+        <!-- 表示モード -->
+        <template v-if="!termEditMode">
+          <div class="mb-3 flex items-start justify-between gap-2">
+            <div>
+              <p class="text-lg font-bold text-ink-800">{{ selectedTermCtx.term.word }}</p>
+              <p class="text-sm text-ink-400">（{{ selectedTermCtx.term.reading }}）</p>
+            </div>
+            <button
+              v-if="isLoggedIn"
+              class="rounded-full p-1.5 text-ink-300 hover:bg-ink-100 hover:text-ink-500"
+              @click.stop="startTermEdit"
+            >
+              <Icon name="edit" size="18" />
+            </button>
+          </div>
+          <p class="text-sm leading-relaxed text-ink-700">{{ selectedTermCtx.term.explanation }}</p>
+          <button
+            class="mt-5 w-full rounded-xl bg-ink-100 py-2.5 text-sm font-medium text-ink-700"
+            @click="closeTermModal"
+          >
+            閉じる
+          </button>
+        </template>
+
+        <!-- 編集モード -->
+        <template v-else>
+          <h3 class="mb-4 font-semibold text-ink-800">用語を修正</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="mb-1 block text-xs text-ink-500">用語（漢字）</label>
+              <input v-model="termEditForm.word" class="field w-full" />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs text-ink-500">読み方（ひらがな）</label>
+              <input v-model="termEditForm.reading" class="field w-full" />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs text-ink-500">説明</label>
+              <textarea v-model="termEditForm.explanation" class="field w-full" rows="4" />
+            </div>
+          </div>
+          <p v-if="termSaveError" class="mt-2 text-xs text-red-500">{{ termSaveError }}</p>
+          <div class="mt-5 flex gap-3">
+            <button
+              class="flex-1 rounded-xl border border-ink-200 py-2.5 text-sm text-ink-700"
+              @click="termEditMode = false"
+            >
+              キャンセル
+            </button>
+            <button
+              class="btn-primary flex-1 py-2.5 text-sm disabled:opacity-50"
+              :disabled="saving"
+              @click="saveTermEdit"
+            >
+              {{ saving ? '保存中…' : '保存する' }}
+            </button>
+          </div>
+        </template>
       </div>
     </Transition>
 
