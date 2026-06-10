@@ -16,6 +16,7 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "firebase": "^11.1.0",
     "firebase-admin": "^13.0.2",
     "google-auth-library": "^9.15.0",
