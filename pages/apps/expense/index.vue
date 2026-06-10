@@ -117,6 +117,18 @@ async function exportExcel() {
     return
   }
 
+  // Try to open directly in Microsoft Excel via URL scheme
+  if (res.downloadUrl) {
+    window.location.href = 'ms-excel://open?file=' + encodeURIComponent(res.downloadUrl)
+    // Wait 1.5s: if Excel opened the page goes to background (document.hidden = true)
+    await new Promise((r) => setTimeout(r, 1500))
+    if (document.hidden) {
+      exporting.value = false
+      return
+    }
+  }
+
+  // Fallback: share sheet or blob download
   try {
     const bytes = Uint8Array.from(atob(res.base64), (c) => c.charCodeAt(0))
     const blob = new Blob([bytes], {
@@ -127,8 +139,7 @@ async function exportExcel() {
       try {
         await navigator.share({ files: [file], title: res.filename })
       } catch (shareErr: any) {
-        if (shareErr?.name === 'AbortError') { /* user cancelled — ok */ return }
-        // Share failed — fall back to download link
+        if (shareErr?.name === 'AbortError') { exporting.value = false; return }
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url; a.download = res.filename; a.click()
@@ -141,7 +152,9 @@ async function exportExcel() {
       setTimeout(() => URL.revokeObjectURL(url), 1000)
     }
   } catch (e: any) {
-    exportError.value = 'ファイルの保存に失敗しました: ' + (e?.message || String(e))
+    if ((e as any)?.name !== 'AbortError') {
+      exportError.value = 'ファイルの保存に失敗しました'
+    }
   } finally {
     exporting.value = false
   }

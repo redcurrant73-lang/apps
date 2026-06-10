@@ -158,8 +158,25 @@ export default defineEventHandler(async (event) => {
     const buf = await workbook.xlsx.writeBuffer()
     const base64 = Buffer.from(buf as any).toString('base64')
     const [, sm] = start.split('-')
+
+    // Upload to Cloud Storage so client can open directly in Excel via URL scheme
+    let downloadUrl: string | null = null
+    try {
+      const token = crypto.randomUUID()
+      const exportPath = `apps/expense/exports/${decoded.uid}/${period}.xlsx`
+      await getStorage().bucket(BUCKET).file(exportPath).save(Buffer.from(buf as any), {
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        resumable: false,
+        metadata: { metadata: { firebaseStorageDownloadTokens: token } },
+      })
+      downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(exportPath)}?alt=media&token=${token}`
+    } catch (e) {
+      console.error('[expense/export] storage upload failed:', e)
+    }
+
     return {
       base64,
+      downloadUrl,
       filename: `経費精算申請書_${m}月精算分.xlsx`,
       count: expenses.length,
       periodLabel: `${Number(sm)}月16日〜${m}月15日`,
