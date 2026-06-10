@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ExcelJS from 'exceljs'
 import { getStorage } from 'firebase-admin/storage'
@@ -15,7 +15,6 @@ const SUBCATEGORY: Record<string, string> = {
   other: 'その他',
 }
 
-// 締め日15日: 「6月精算分」= 5/16〜6/15
 function periodRange(period: string): { start: string; end: string } {
   const [y, m] = period.split('-').map(Number)
   const startYear = m === 1 ? y - 1 : y
@@ -24,6 +23,17 @@ function periodRange(period: string): { start: string; end: string } {
     start: `${startYear}-${String(startMonth).padStart(2, '0')}-16`,
     end: `${y}-${String(m).padStart(2, '0')}-15`,
   }
+}
+
+function findTemplatePath(): string | null {
+  const candidates = [
+    resolve(process.cwd(), '.output', 'public', 'expense-template.xlsx'),
+    resolve(process.cwd(), 'public', 'expense-template.xlsx'),
+  ]
+  for (const p of candidates) {
+    if (existsSync(p)) return p
+  }
+  return null
 }
 
 export default defineEventHandler(async (event) => {
@@ -38,7 +48,6 @@ export default defineEventHandler(async (event) => {
   const { start, end } = periodRange(period)
   const [y, m] = period.split('-').map(Number)
 
-  // Load expenses for this settlement period
   const base = `apps/expense/users/${decoded.uid}/expenses`
   const snap = await db.collection(base)
     .where('date', '>=', start)
@@ -47,57 +56,51 @@ export default defineEventHandler(async (event) => {
     .get()
   const expenses = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() as any }))
 
-  // Load settings
   const settingsRef = db.collection('apps/expense/users').doc(decoded.uid).collection('meta').doc('settings')
   const settingsSnap = await settingsRef.get()
   const templateId = settingsSnap.data()?.excelTemplateId || null
 
-  // Load user name
   const userSnap = await db.collection('users').doc(decoded.uid).get()
   const displayName = userSnap.data()?.displayName || '小西祐子'
 
   const workbook = new ExcelJS.Workbook()
   const sheetName = `${m}月精算分`
 
+  // Step 1: try Cloud Storage template
   if (templateId) {
-    // Load template from Cloud Storage
-    const path = `apps/expense/users/${decoded.uid}/${templateId}`
+    const storagePath = `apps/expense/users/${decoded.uid}/${templateId}`
     try {
-      const [buf] = await getStorage().bucket(BUCKET).file(path).download()
+      const [buf] = await getStorage().bucket(BUCKET).file(storagePath).download()
       await workbook.xlsx.load(buf)
-    } catch {
-      // Template load failed — fall through to default
+    } catch (e) {
+      console.error('[expense/export] Cloud Storage template load failed:', e)
       workbook.worksheets.forEach((ws) => workbook.removeWorksheet(ws.id))
     }
   }
 
-  // If no template loaded, try the bundled default from public/
-  // In production (Cloud Run), CWD=/app and build output is at /app/.output/
+  // Step 2: try bundled filesystem template
   if (workbook.worksheets.length === 0) {
-    const candidatePaths = [
-      resolve(process.cwd(), '.output', 'public', 'expense-template.xlsx'),
-      resolve(process.cwd(), 'public', 'expense-template.xlsx'),
-    ]
-    for (const p of candidatePaths) {
+    const p = findTemplatePath()
+    console.log('[expense/export] template path candidate:', p, 'cwd:', process.cwd())
+    if (p) {
       try {
         const buf = readFileSync(p)
         await workbook.xlsx.load(buf)
-        if (workbook.worksheets.length > 0) break
-      } catch {}
+      } catch (e) {
+        console.error('[expense/export] filesystem template load failed:', e)
+        workbook.worksheets.forEach((ws) => workbook.removeWorksheet(ws.id))
+      }
     }
   }
 
   let ws: ExcelJS.Worksheet
 
   if (workbook.worksheets.length > 0) {
-    // Find the target sheet by name
     ws = workbook.worksheets.find((s) => s.name === sheetName) || workbook.worksheets[0]
 
-    // Fill metadata
     ws.getCell(2, 11).value = new Date()
     ws.getCell(4, 11).value = displayName
 
-    // Overwrite data rows starting from row 7
     const DATA_START = 7
     const clearUntil = Math.max(DATA_START + expenses.length + 20, DATA_START + 40)
 
@@ -121,21 +124,22 @@ export default defineEventHandler(async (event) => {
       }
     }
   } else {
-    // No template at all — generate minimal format
+    // No template — generate minimal format
+    console.log('[expense/export] no template found, generating minimal workbook')
     ws = workbook.addWorksheet(sheetName)
     ws.getRow(1).getCell(1).value = '経費精算申請書'
-    ws.getRow(1).getCell(1).font = { bold: true, size: 14 }
-    ws.getRow(2).getCell(10).value = '申請日'; ws.getRow(2).getCell(11).value = new Date()
-    ws.getRow(4).getCell(10).value = '申請者'; ws.getRow(4).getCell(11).value = displayName
+    ws.getRow(2).getCell(10).value = '申請日'
+    ws.getRow(2).getCell(11).value = new Date()
+    ws.getRow(4).getCell(10).value = '申請者'
+    ws.getRow(4).getCell(11).value = displayName
 
-    const headers = ['No', '日付', '費目', '案件名', '支払先', '電車代・昼食代等', '詳細・備考（区間・経由駅・行き先など）', '片道 往復', '領収書', '金額', 'ガソリン代 距離（km）']
-    const widths = [5, 13, 20, 12, 20, 16, 36, 10, 9, 12, 20]
+    const headers = ['No', '日付', '費目', '案件名', '支払先', '電車代・昼食代等', '詳細・備考', '片道/往復', '領収書', '金額']
+    const widths = [5, 13, 20, 12, 20, 16, 36, 10, 9, 12]
     const hRow = ws.getRow(6)
     headers.forEach((h, i) => {
       hRow.getCell(i + 1).value = h
       ws.getColumn(i + 1).width = widths[i]
     })
-    hRow.font = { bold: true }
 
     for (let i = 0; i < expenses.length; i++) {
       const exp = expenses[i]
@@ -153,11 +157,16 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const buf = await workbook.xlsx.writeBuffer()
-  const base64 = Buffer.from(buf).toString('base64')
+  let buf: ExcelJS.Buffer
+  try {
+    buf = await workbook.xlsx.writeBuffer()
+  } catch (e: any) {
+    console.error('[expense/export] writeBuffer failed:', e)
+    throw createError({ statusCode: 500, message: `Excel生成エラー: ${e?.message || String(e)}` })
+  }
 
-  // Format filename with period dates
-  const [sy, sm] = start.split('-')
+  const base64 = Buffer.from(buf as any).toString('base64')
+  const [, sm] = start.split('-')
   return {
     base64,
     filename: `経費精算申請書_${m}月精算分.xlsx`,
