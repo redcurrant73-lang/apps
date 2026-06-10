@@ -43,8 +43,15 @@ async function seedIfNeeded(uid: string) {
   // Upload the bundled template to Cloud Storage if not already there
   if (!settings.excelTemplateId) {
     try {
-      const templatePath = resolve(process.cwd(), 'public', 'expense-template.xlsx')
-      const templateBuf = readFileSync(templatePath)
+      const candidatePaths = [
+        resolve(process.cwd(), '.output', 'public', 'expense-template.xlsx'),
+        resolve(process.cwd(), 'public', 'expense-template.xlsx'),
+      ]
+      let templateBuf: Buffer | null = null
+      for (const p of candidatePaths) {
+        try { templateBuf = readFileSync(p); break } catch {}
+      }
+      if (!templateBuf) throw new Error('template not found')
       const templateId = `template_default.xlsx`
       const storagePath = `apps/expense/users/${uid}/${templateId}`
       await getStorage().bucket(BUCKET).file(storagePath).save(templateBuf, {

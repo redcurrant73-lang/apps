@@ -124,6 +124,7 @@ async function exportExcel() {
       URL.revokeObjectURL(url)
     }
   } catch (e: any) {
+    if (e?.name === 'AbortError') return
     exportError.value = e?.data?.message || 'ファイルの作成に失敗しました'
   } finally {
     exporting.value = false

@@ -72,12 +72,19 @@ export default defineEventHandler(async (event) => {
   }
 
   // If no template loaded, try the bundled default from public/
+  // In production (Cloud Run), CWD=/app and build output is at /app/.output/
   if (workbook.worksheets.length === 0) {
-    try {
-      const templatePath = resolve(process.cwd(), 'public', 'expense-template.xlsx')
-      const buf = readFileSync(templatePath)
-      await workbook.xlsx.load(buf)
-    } catch {}
+    const candidatePaths = [
+      resolve(process.cwd(), '.output', 'public', 'expense-template.xlsx'),
+      resolve(process.cwd(), 'public', 'expense-template.xlsx'),
+    ]
+    for (const p of candidatePaths) {
+      try {
+        const buf = readFileSync(p)
+        await workbook.xlsx.load(buf)
+        if (workbook.worksheets.length > 0) break
+      } catch {}
+    }
   }
 
   let ws: ExcelJS.Worksheet
