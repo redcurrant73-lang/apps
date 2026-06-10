@@ -105,27 +105,43 @@ async function deleteExpense(id: string) {
 
 async function exportExcel() {
   exporting.value = true; exportError.value = ''
+  let res: any
   try {
-    const res = await $api('/api/apps/expense/export', {
+    res = await $api('/api/apps/expense/export', {
       method: 'POST',
       body: { period: periodStr.value },
     })
+  } catch (e: any) {
+    exportError.value = e?.data?.message || e?.message || 'サーバーエラーが発生しました'
+    exporting.value = false
+    return
+  }
+
+  try {
     const bytes = Uint8Array.from(atob(res.base64), (c) => c.charCodeAt(0))
     const blob = new Blob([bytes], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
     const file = new File([blob], res.filename, { type: blob.type })
     if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: res.filename })
+      try {
+        await navigator.share({ files: [file], title: res.filename })
+      } catch (shareErr: any) {
+        if (shareErr?.name === 'AbortError') { /* user cancelled — ok */ return }
+        // Share failed — fall back to download link
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = res.filename; a.click()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }
     } else {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url; a.download = res.filename; a.click()
-      URL.revokeObjectURL(url)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
     }
   } catch (e: any) {
-    if (e?.name === 'AbortError') return
-    exportError.value = e?.data?.message || 'ファイルの作成に失敗しました'
+    exportError.value = 'ファイルの保存に失敗しました: ' + (e?.message || String(e))
   } finally {
     exporting.value = false
   }
