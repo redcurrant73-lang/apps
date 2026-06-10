@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
   const decoded = await requireSuperuser(event)
   const body = await readBody(event)
 
-  const { date, type, from, to, amount, direction, addressee, notes, receiptImageId } = body
+  const { date, type, from, to, amount, direction, addressee, notes, receiptImageId, projectName, payee, hasReceipt } = body
 
   if (!date || !from || !to || !amount) {
     throw createError({ statusCode: 400, message: '日付・出発地・到着地・金額は必須です' })
@@ -29,6 +29,9 @@ export default defineEventHandler(async (event) => {
     addressee: addressee || null,
     notes: notes || null,
     receiptImageId: receiptImageId || null,
+    projectName: projectName || null,
+    payee: payee || null,
+    hasReceipt: hasReceipt ?? false,
     createdAt: FieldValue.serverTimestamp(),
   })
 

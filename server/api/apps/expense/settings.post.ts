@@ -11,6 +11,10 @@ export default defineEventHandler(async (event) => {
   if ('savedAddressees' in body && Array.isArray(body.savedAddressees)) {
     updates.savedAddressees = body.savedAddressees.filter((a: any) => typeof a === 'string' && a.trim())
   }
+  if ('savedProjectNames' in body && Array.isArray(body.savedProjectNames)) {
+    updates.savedProjectNames = body.savedProjectNames.filter((a: any) => typeof a === 'string' && a.trim())
+  }
+  if ('defaultProjectName' in body) updates.defaultProjectName = String(body.defaultProjectName || '')
 
   await ref.set(updates, { merge: true })
   return { ok: true }

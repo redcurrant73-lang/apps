@@ -7,6 +7,8 @@ export default defineEventHandler(async (event) => {
   const data = snap.data() || {}
   return {
     savedAddressees: data.savedAddressees || [],
+    savedProjectNames: data.savedProjectNames || [],
+    defaultProjectName: data.defaultProjectName || '',
     reportEmailTo: data.reportEmailTo || '',
     hasTemplate: !!data.excelTemplateId,
     excelTemplateMapping: data.excelTemplateMapping || null,

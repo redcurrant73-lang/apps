@@ -5,16 +5,17 @@ import { db } from '~/server/utils/firestore'
 const PROJECT = process.env.NUXT_GCP_PROJECT_ID || process.env.GCP_PROJECT_ID || 'apps-498001'
 const BUCKET = `${PROJECT}.firebasestorage.app`
 
-const TRANSPORT_LABELS: Record<string, string> = {
-  shinkansen: '新幹線',
-  train: '電車',
-  bus: 'バス',
-  taxi: 'タクシー',
+// Maps our transport type → 電車代・昼食代等 column value
+const SUBCATEGORY: Record<string, string> = {
+  shinkansen: '新幹線代',
+  train: '電車代',
+  bus: 'バス代',
+  taxi: 'タクシー代',
   other: 'その他',
 }
 const DIRECTION_LABELS: Record<string, string> = {
-  outbound: '行き',
-  return: '帰り',
+  outbound: '片道',
+  return: '片道',
   round: '往復',
   'one-way': '片道',
 }
@@ -41,119 +42,106 @@ export default defineEventHandler(async (event) => {
 
   const expenses = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() as any }))
 
-  // Load settings
+  // Load settings (for template)
   const settingsRef = db.collection('apps/expense/users').doc(decoded.uid).collection('meta').doc('settings')
   const settingsSnap = await settingsRef.get()
   const settings = settingsSnap.data() || {}
-  const mapping = settings.excelTemplateMapping || null
   const templateId = settings.excelTemplateId || null
 
-  const workbook = new ExcelJS.Workbook()
+  // Load user display name
+  const userSnap = await db.collection('users').doc(decoded.uid).get()
+  const displayName = userSnap.data()?.displayName || '小西祐子'
 
-  if (templateId && mapping) {
-    // Use uploaded template
+  const workbook = new ExcelJS.Workbook()
+  let ws: ExcelJS.Worksheet
+
+  if (templateId) {
+    // Use the uploaded template
     const path = `apps/expense/users/${decoded.uid}/${templateId}`
     const [buf] = await getStorage().bucket(BUCKET).file(path).download()
     await workbook.xlsx.load(buf)
 
-    const ws = workbook.worksheets[0]
-    const dataStart = Number(mapping.dataStartRow) || 2
-    const cols = mapping.columns || {}
+    // Find the target month sheet: e.g. "6月精算分"
+    const sheetName = `${m}月精算分`
+    ws = workbook.worksheets.find((s) => s.name === sheetName) || workbook.worksheets[0]
 
-    // Copy style from first data row if it exists (as template for new rows)
-    const templateRow = ws.getRow(dataStart)
-    const templateStyles: Record<number, Partial<ExcelJS.Style>> = {}
-    templateRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
-      if (cell.style) {
-        try { templateStyles[colNum] = JSON.parse(JSON.stringify(cell.style)) } catch {}
-      }
-    })
+    // Fill 申請日 (row2, col11) and 申請者 (row4, col11)
+    ws.getCell(2, 11).value = new Date()
+    ws.getCell(4, 11).value = displayName
 
-    // Clear existing data rows (keep header rows)
-    for (let r = ws.rowCount; r >= dataStart; r--) {
-      ws.spliceRows(r, 1)
-    }
+    // Data starts at row 7. Overwrite existing rows with new data, then blank out extras.
+    const dataRowStart = 7
+    const maxRows = Math.max(expenses.length + dataRowStart, 30) // clear up to at least row 30
 
-    // Insert expense rows
-    for (const exp of expenses) {
-      const rowData: any[] = []
-      const maxCol = Math.max(
-        ...[cols.date, cols.transportation, cols.from, cols.to, cols.combinedRoute, cols.amount, cols.addressee, cols.notes]
-          .filter(Boolean).map(Number),
-        1,
-      )
-      for (let c = 1; c <= maxCol; c++) rowData.push('')
-
-      const set = (col: number | undefined | null, val: any) => {
-        if (col && col > 0) rowData[col - 1] = val
-      }
-
-      const d = String(exp.date || '')
-      set(cols.date, d)
-      set(cols.transportation, TRANSPORT_LABELS[exp.type] || exp.type || '')
-
-      if (cols.combinedRoute) {
-        set(cols.combinedRoute, exp.from && exp.to ? `${exp.from}→${exp.to}` : (exp.from || exp.to || ''))
+    for (let r = dataRowStart; r <= maxRows; r++) {
+      const exp = expenses[r - dataRowStart]
+      const row = ws.getRow(r)
+      if (exp) {
+        row.getCell(1).value = r - dataRowStart + 1          // No
+        row.getCell(2).value = new Date(exp.date + 'T00:00:00') // 日付
+        row.getCell(3).value = '旅費交通費＿国内'              // 費目
+        row.getCell(4).value = exp.projectName || ''           // 案件名
+        row.getCell(5).value = exp.payee || ''                 // 支払先
+        row.getCell(6).value = SUBCATEGORY[exp.type] || 'その他' // 電車代・昼食代等
+        row.getCell(7).value = `${exp.from}→${exp.to}`        // 詳細・備考
+        row.getCell(8).value = DIRECTION_LABELS[exp.direction] || '片道' // 片道 往復
+        row.getCell(9).value = exp.hasReceipt ? '〇' : '-'    // 領収書
+        row.getCell(10).value = Number(exp.amount) || 0        // 金額
+        row.getCell(11).value = null                            // ガソリン代距離
       } else {
-        set(cols.from, exp.from || '')
-        set(cols.to, exp.to || '')
-      }
-
-      set(cols.amount, Number(exp.amount) || 0)
-      set(cols.addressee, exp.addressee || '')
-      set(cols.notes, [exp.notes, DIRECTION_LABELS[exp.direction]].filter(Boolean).join(' ') || '')
-
-      const row = ws.addRow(rowData)
-      // Apply template styles
-      row.eachCell({ includeEmpty: true }, (cell, colNum) => {
-        if (templateStyles[colNum]) {
-          try { cell.style = JSON.parse(JSON.stringify(templateStyles[colNum])) } catch {}
+        // Clear extra rows that had template placeholders
+        for (let c = 1; c <= 11; c++) {
+          const cell = row.getCell(c)
+          if (c !== 9) cell.value = null  // keep 9 structure but clear value
+          else cell.value = null
         }
-      })
+      }
+      row.commit()
     }
   } else {
-    // Default template (no uploaded template)
-    const ws = workbook.addWorksheet('交通費')
-    const [y2, m2] = month.split('-').map(Number)
-    ws.mergeCells('A1:H1')
-    ws.getCell('A1').value = `${y2}年${m2}月 交通費精算書`
+    // No template: generate a simple default format
+    ws = workbook.addWorksheet(`${m}月精算分`)
+    ws.mergeCells('A1:K1')
+    ws.getCell('A1').value = '経費精算申請書'
     ws.getCell('A1').font = { bold: true, size: 14 }
     ws.getCell('A1').alignment = { horizontal: 'center' }
 
-    const headers = ['日付', '交通手段', '出発地', '到着地', '区間（まとめ）', '金額（円）', '宛名', '備考']
-    const widths = [14, 12, 16, 16, 22, 14, 16, 20]
-    ws.addRow([])
-    const hRow = ws.addRow(headers)
-    hRow.font = { bold: true }
-    hRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD0E4FF' } }
-    headers.forEach((_, i) => { ws.getColumn(i + 1).width = widths[i] })
+    ws.getCell('J2').value = '申請日'; ws.getCell('K2').value = new Date()
+    ws.getCell('J4').value = '申請者'; ws.getCell('K4').value = displayName
 
-    for (const exp of expenses) {
-      ws.addRow([
-        exp.date || '',
-        TRANSPORT_LABELS[exp.type] || exp.type || '',
-        exp.from || '',
-        exp.to || '',
-        exp.from && exp.to ? `${exp.from}→${exp.to}` : '',
-        Number(exp.amount) || 0,
-        exp.addressee || '',
-        [exp.notes, DIRECTION_LABELS[exp.direction]].filter(Boolean).join(' '),
-      ])
+    const headers = ['No', '日付', '費目', '案件名', '支払先', '電車代・昼食代等', '詳細・備考（区間・経由駅・行き先など）', '片道 往復', '領収書', '金額', 'ガソリン代 距離（km）']
+    const widths = [5, 13, 20, 12, 20, 16, 32, 10, 9, 12, 20]
+    const hRow = ws.addRow([]); ws.addRow([]); ws.addRow([]); ws.addRow([])
+    ws.addRow([]); ws.addRow([])
+    const headerRow = ws.getRow(6)
+    headers.forEach((h, i) => { headerRow.getCell(i + 1).value = h; ws.getColumn(i + 1).width = widths[i] })
+    headerRow.font = { bold: true }
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD0E4FF' } }
+    headerRow.commit()
+
+    for (let i = 0; i < expenses.length; i++) {
+      const exp = expenses[i]
+      const row = ws.getRow(7 + i)
+      row.getCell(1).value = i + 1
+      row.getCell(2).value = new Date(exp.date + 'T00:00:00')
+      row.getCell(3).value = '旅費交通費＿国内'
+      row.getCell(4).value = exp.projectName || ''
+      row.getCell(5).value = exp.payee || ''
+      row.getCell(6).value = SUBCATEGORY[exp.type] || 'その他'
+      row.getCell(7).value = `${exp.from}→${exp.to}`
+      row.getCell(8).value = DIRECTION_LABELS[exp.direction] || '片道'
+      row.getCell(9).value = exp.hasReceipt ? '〇' : '-'
+      row.getCell(10).value = Number(exp.amount) || 0
+      row.commit()
     }
-
-    // Total row
-    const totalRow = ws.addRow(['合計', '', '', '', '', { formula: `SUM(F4:F${3 + expenses.length})` }, '', ''])
-    totalRow.font = { bold: true }
-    totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF0C0' } }
   }
 
   const buf = await workbook.xlsx.writeBuffer()
   const base64 = Buffer.from(buf).toString('base64')
 
-  const [y2, m2] = month.split('-').map(Number)
   return {
     base64,
-    filename: `交通費報告書_${y2}年${m2}月.xlsx`,
+    filename: `経費精算申請書_${y}年${m}月.xlsx`,
     count: expenses.length,
   }
 })

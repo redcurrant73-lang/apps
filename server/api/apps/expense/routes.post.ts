@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
   const decoded = await requireSuperuser(event)
   const body = await readBody(event)
 
-  const { id, name, from, to, type, amount } = body
+  const { id, name, from, to, type, amount, payee, projectName, hasReceipt } = body
   if (!name || !from || !to || !amount) {
     throw createError({ statusCode: 400, message: 'ルート名・出発地・到着地・金額は必須です' })
   }
@@ -17,6 +17,9 @@ export default defineEventHandler(async (event) => {
     to,
     type: type || 'train',
     amount: Number(amount),
+    payee: payee || null,
+    projectName: projectName || null,
+    hasReceipt: hasReceipt ?? false,
     updatedAt: FieldValue.serverTimestamp(),
   }
 

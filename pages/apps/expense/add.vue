@@ -9,6 +9,11 @@ watch([ready, user], () => {
 type Tab = 'choose' | 'ocr' | 'routes' | 'manual'
 const tab = ref<Tab>('choose')
 
+// ---- Shared data ----
+const savedAddressees = ref<string[]>([])
+const savedProjectNames = ref<string[]>([])
+const defaultProjectName = ref('')
+
 // ---- OCR flow ----
 const fileInput = ref<HTMLInputElement | null>(null)
 const ocrLoading = ref(false)
@@ -16,10 +21,12 @@ const ocrError = ref('')
 const ocrResult = ref<{ date: string; from: string; to: string; amount: number; trainName: string | null; notes: string | null } | null>(null)
 const ocrAddresseeInput = ref('')
 const ocrSaveNewAddressee = ref(false)
-const savedAddressees = ref<string[]>([])
+const ocrProjectName = ref('')
+const ocrPayee = ref('JR東海')
+const ocrHasReceipt = ref(true)
 
 // ---- Routes flow ----
-interface SavedRoute { id: string; name: string; from: string; to: string; type: string; amount: number }
+interface SavedRoute { id: string; name: string; from: string; to: string; type: string; amount: number; payee?: string; projectName?: string; hasReceipt?: boolean }
 const routes = ref<SavedRoute[]>([])
 const routesLoading = ref(true)
 const selectedRoute = ref<SavedRoute | null>(null)
@@ -35,6 +42,9 @@ const manualAmount = ref('')
 const manualDirection = ref<'outbound' | 'return' | 'round' | 'one-way'>('outbound')
 const manualAddressee = ref('')
 const manualNotes = ref('')
+const manualProjectName = ref('')
+const manualPayee = ref('')
+const manualHasReceipt = ref(false)
 
 const saving = ref(false)
 const saveError = ref('')
@@ -51,6 +61,10 @@ onMounted(async () => {
   ])
   routes.value = routeRes
   savedAddressees.value = settings.savedAddressees || []
+  savedProjectNames.value = settings.savedProjectNames || []
+  defaultProjectName.value = settings.defaultProjectName || ''
+  ocrProjectName.value = settings.defaultProjectName || ''
+  manualProjectName.value = settings.defaultProjectName || ''
   routesLoading.value = false
 })
 
@@ -64,13 +78,9 @@ async function readFile(file: File): Promise<{ base64: string; mimeType: string 
       r.readAsDataURL(file)
     })
   }
-  // Image: compress first
   const maxDim = 1600
   const dataUrl = await new Promise<string>((res, rej) => {
-    const r = new FileReader()
-    r.onload = () => res(r.result as string)
-    r.onerror = rej
-    r.readAsDataURL(file)
+    const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(file)
   })
   const img = await new Promise<HTMLImageElement>((res, rej) => {
     const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl
@@ -96,9 +106,7 @@ async function onReceiptChange(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
   if (fileInput.value) fileInput.value.value = ''
-  ocrLoading.value = true
-  ocrError.value = ''
-  ocrResult.value = null
+  ocrLoading.value = true; ocrError.value = ''; ocrResult.value = null
   try {
     const { base64, mimeType } = await readFile(file)
     const res = await $api('/api/apps/expense/ocr', { method: 'POST', body: { image: base64, mimeType } })
@@ -112,8 +120,7 @@ async function onReceiptChange(e: Event) {
 
 async function saveOcr() {
   if (!ocrResult.value) return
-  saving.value = true
-  saveError.value = ''
+  saving.value = true; saveError.value = ''
   try {
     const addressee = ocrAddresseeInput.value.trim()
     if (addressee && ocrSaveNewAddressee.value && !savedAddressees.value.includes(addressee)) {
@@ -132,7 +139,10 @@ async function saveOcr() {
         amount: ocrResult.value.amount,
         direction: 'one-way',
         addressee,
-        notes: ocrResult.value.trainName || ocrResult.value.notes || '',
+        notes: ocrResult.value.trainName || ocrResult.value.notes || null,
+        projectName: ocrProjectName.value || null,
+        payee: ocrPayee.value || null,
+        hasReceipt: ocrHasReceipt.value,
       },
     })
     navigateTo('/apps/expense')
@@ -144,14 +154,9 @@ async function saveOcr() {
 }
 
 // --- Routes ---
-function selectRoute(r: SavedRoute) {
-  selectedRoute.value = r
-}
-
 async function saveRoute() {
   if (!selectedRoute.value) return
-  saving.value = true
-  saveError.value = ''
+  saving.value = true; saveError.value = ''
   try {
     await $api('/api/apps/expense/expenses', {
       method: 'POST',
@@ -162,6 +167,9 @@ async function saveRoute() {
         to: selectedRoute.value.to,
         amount: selectedRoute.value.amount,
         direction: routeDirection.value,
+        projectName: selectedRoute.value.projectName || null,
+        payee: selectedRoute.value.payee || null,
+        hasReceipt: selectedRoute.value.hasReceipt ?? false,
       },
     })
     navigateTo('/apps/expense')
@@ -175,13 +183,10 @@ async function saveRoute() {
 // --- Manual ---
 async function saveManual() {
   if (!manualFrom.value || !manualTo.value || !manualAmount.value) {
-    saveError.value = '出発地・到着地・金額を入力してください'
-    return
+    saveError.value = '出発地・到着地・金額を入力してください'; return
   }
-  saving.value = true
-  saveError.value = ''
+  saving.value = true; saveError.value = ''
   try {
-    const addressee = manualAddressee.value.trim()
     await $api('/api/apps/expense/expenses', {
       method: 'POST',
       body: {
@@ -191,8 +196,11 @@ async function saveManual() {
         to: manualTo.value,
         amount: Number(manualAmount.value),
         direction: manualDirection.value,
-        addressee: addressee || null,
+        addressee: manualAddressee.value || null,
         notes: manualNotes.value || null,
+        projectName: manualProjectName.value || null,
+        payee: manualPayee.value || null,
+        hasReceipt: manualHasReceipt.value,
       },
     })
     navigateTo('/apps/expense')
@@ -211,8 +219,8 @@ const TRANSPORT_OPTIONS = [
   { value: 'other', label: 'その他' },
 ]
 const DIRECTION_OPTIONS = [
-  { value: 'outbound', label: '行き' },
-  { value: 'return', label: '帰り' },
+  { value: 'outbound', label: '行き（片道）' },
+  { value: 'return', label: '帰り（片道）' },
   { value: 'round', label: '往復' },
   { value: 'one-way', label: '片道' },
 ]
@@ -282,7 +290,7 @@ const DIRECTION_OPTIONS = [
           </div>
 
           <template v-else-if="!ocrResult">
-            <div class="card text-center py-8">
+            <div class="card py-8 text-center">
               <div class="mb-4 flex justify-center text-ink-200">
                 <Icon name="receipt" size="48" />
               </div>
@@ -292,9 +300,7 @@ const DIRECTION_OPTIONS = [
                 ファイルを選ぶ
               </button>
             </div>
-            <p v-if="ocrError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
-              {{ ocrError }}
-            </p>
+            <p v-if="ocrError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{{ ocrError }}</p>
           </template>
 
           <template v-else>
@@ -321,27 +327,37 @@ const DIRECTION_OPTIONS = [
               </div>
 
               <div>
+                <label class="mb-1 block text-xs text-ink-400">支払先（鉄道会社）</label>
+                <input v-model="ocrPayee" type="text" class="field" placeholder="例：JR東海" />
+              </div>
+
+              <div>
+                <label class="mb-1 block text-xs text-ink-400">案件名</label>
+                <select v-model="ocrProjectName" class="field">
+                  <option value="">（未選択）</option>
+                  <option v-for="p in savedProjectNames" :key="p" :value="p">{{ p }}</option>
+                </select>
+              </div>
+
+              <div>
                 <label class="mb-1 block text-xs text-ink-400">宛名（領収書に記載）</label>
-                <div class="flex gap-2">
-                  <select v-model="ocrAddresseeInput" class="field flex-1">
-                    <option value="">選択または入力</option>
-                    <option v-for="a in savedAddressees" :key="a" :value="a">{{ a }}</option>
-                  </select>
-                </div>
-                <input
-                  v-model="ocrAddresseeInput"
-                  type="text"
-                  class="field mt-2"
-                  placeholder="宛名（例：小西祐子）"
-                />
+                <select v-model="ocrAddresseeInput" class="field mb-2">
+                  <option value="">選択または直接入力</option>
+                  <option v-for="a in savedAddressees" :key="a" :value="a">{{ a }}</option>
+                </select>
+                <input v-model="ocrAddresseeInput" type="text" class="field" placeholder="宛名（例：小西祐子）" />
                 <label v-if="ocrAddresseeInput && !savedAddressees.includes(ocrAddresseeInput)" class="mt-2 flex items-center gap-2 text-sm text-ink-500">
                   <input v-model="ocrSaveNewAddressee" type="checkbox" />
-                  この宛名を次回も使えるように保存する
+                  次回も使えるように保存する
                 </label>
               </div>
 
-              <p v-if="saveError" class="text-sm text-red-500">{{ saveError }}</p>
+              <label class="flex items-center gap-2 text-sm text-ink-600">
+                <input v-model="ocrHasReceipt" type="checkbox" />
+                領収書あり（Excelに「〇」が入ります）
+              </label>
 
+              <p v-if="saveError" class="text-sm text-red-500">{{ saveError }}</p>
               <div class="flex gap-3">
                 <button class="btn-ghost flex-1" @click="ocrResult = null">撮り直す</button>
                 <button class="btn-primary flex-1" :disabled="saving" @click="saveOcr">
@@ -358,30 +374,19 @@ const DIRECTION_OPTIONS = [
 
           <template v-else-if="!selectedRoute">
             <div v-if="routes.length === 0" class="card py-10 text-center">
-              <div class="mb-3 flex justify-center text-ink-200">
-                <Icon name="bookmark" size="40" />
-              </div>
+              <div class="mb-3 flex justify-center text-ink-200"><Icon name="bookmark" size="40" /></div>
               <p class="text-ink-600">よく使うルートがまだ登録されていません</p>
-              <NuxtLink to="/apps/expense/settings" class="mt-3 inline-block text-sm text-brand">
-                設定から登録する
-              </NuxtLink>
+              <NuxtLink to="/apps/expense/settings" class="mt-3 inline-block text-sm text-brand">設定から登録する</NuxtLink>
             </div>
             <div v-else class="space-y-2">
               <p class="text-sm text-ink-500">どのルートを使いましたか？</p>
-              <button
-                v-for="r in routes"
-                :key="r.id"
-                class="card-tap w-full text-left"
-                @click="selectRoute(r)"
-              >
+              <button v-for="r in routes" :key="r.id" class="card-tap w-full text-left" @click="selectedRoute = r">
                 <div class="flex items-center justify-between">
                   <div>
                     <p class="font-medium text-ink-800">{{ r.name }}</p>
-                    <p class="text-sm text-ink-400">{{ r.from }} → {{ r.to }}</p>
+                    <p class="text-sm text-ink-400">{{ r.from }} → {{ r.to }}<span v-if="r.payee"> · {{ r.payee }}</span></p>
                   </div>
-                  <div class="text-right">
-                    <p class="font-semibold text-ink-700">{{ r.amount.toLocaleString() }}円</p>
-                  </div>
+                  <p class="font-semibold text-ink-700">{{ r.amount.toLocaleString() }}円</p>
                 </div>
               </button>
             </div>
@@ -393,36 +398,23 @@ const DIRECTION_OPTIONS = [
                 <p class="font-semibold text-ink-700">{{ selectedRoute.name }}</p>
                 <p class="text-sm text-ink-400">{{ selectedRoute.from }} → {{ selectedRoute.to }}  {{ selectedRoute.amount.toLocaleString() }}円</p>
               </div>
-
               <div>
                 <label class="mb-1 block text-xs text-ink-400">利用日</label>
                 <input v-model="routeDate" type="date" class="field" />
               </div>
-
               <div>
                 <label class="mb-2 block text-xs text-ink-400">方向</label>
-                <div class="flex gap-2 flex-wrap">
-                  <button
-                    v-for="d in DIRECTION_OPTIONS"
-                    :key="d.value"
+                <div class="flex flex-wrap gap-2">
+                  <button v-for="d in DIRECTION_OPTIONS" :key="d.value"
                     class="rounded-lg border px-4 py-2 text-sm font-medium transition"
-                    :class="routeDirection === d.value
-                      ? 'border-brand bg-brand text-white'
-                      : 'border-ink-200 bg-white text-ink-600 hover:border-brand'"
-                    @click="routeDirection = d.value as any"
-                  >
-                    {{ d.label }}
-                  </button>
+                    :class="routeDirection === d.value ? 'border-brand bg-brand text-white' : 'border-ink-200 bg-white text-ink-600'"
+                    @click="routeDirection = d.value as any">{{ d.label }}</button>
                 </div>
               </div>
-
               <p v-if="saveError" class="text-sm text-red-500">{{ saveError }}</p>
-
               <div class="flex gap-3">
                 <button class="btn-ghost flex-1" @click="selectedRoute = null">戻る</button>
-                <button class="btn-primary flex-1" :disabled="saving" @click="saveRoute">
-                  {{ saving ? '保存中…' : '保存する' }}
-                </button>
+                <button class="btn-primary flex-1" :disabled="saving" @click="saveRoute">{{ saving ? '保存中…' : '保存する' }}</button>
               </div>
             </div>
           </template>
@@ -436,26 +428,23 @@ const DIRECTION_OPTIONS = [
                 <label class="mb-1 block text-xs text-ink-400">日付</label>
                 <input v-model="manualDate" type="date" class="field" />
               </div>
-
               <div class="col-span-2">
                 <label class="mb-1 block text-xs text-ink-400">交通手段</label>
                 <select v-model="manualType" class="field">
                   <option v-for="t in TRANSPORT_OPTIONS" :key="t.value" :value="t.value">{{ t.label }}</option>
                 </select>
               </div>
-
               <div>
                 <label class="mb-1 block text-xs text-ink-400">出発地</label>
-                <input v-model="manualFrom" type="text" class="field" placeholder="例：東京" />
+                <input v-model="manualFrom" type="text" class="field" placeholder="例：品川" />
               </div>
               <div>
                 <label class="mb-1 block text-xs text-ink-400">到着地</label>
-                <input v-model="manualTo" type="text" class="field" placeholder="例：新大阪" />
+                <input v-model="manualTo" type="text" class="field" placeholder="例：小田原" />
               </div>
-
               <div>
                 <label class="mb-1 block text-xs text-ink-400">金額（円）</label>
-                <input v-model="manualAmount" type="number" class="field" placeholder="例：13850" />
+                <input v-model="manualAmount" type="number" class="field" placeholder="例：3100" />
               </div>
               <div>
                 <label class="mb-1 block text-xs text-ink-400">方向</label>
@@ -463,20 +452,34 @@ const DIRECTION_OPTIONS = [
                   <option v-for="d in DIRECTION_OPTIONS" :key="d.value" :value="d.value">{{ d.label }}</option>
                 </select>
               </div>
-
+              <div class="col-span-2">
+                <label class="mb-1 block text-xs text-ink-400">支払先（鉄道会社など）</label>
+                <input v-model="manualPayee" type="text" class="field" placeholder="例：JR東海、東急バス株式会社" />
+              </div>
+              <div class="col-span-2">
+                <label class="mb-1 block text-xs text-ink-400">案件名</label>
+                <select v-model="manualProjectName" class="field">
+                  <option value="">（未選択）</option>
+                  <option v-for="p in savedProjectNames" :key="p" :value="p">{{ p }}</option>
+                </select>
+              </div>
               <div class="col-span-2">
                 <label class="mb-1 block text-xs text-ink-400">宛名（任意）</label>
                 <input v-model="manualAddressee" type="text" class="field" placeholder="新幹線の場合など" />
               </div>
-
               <div class="col-span-2">
                 <label class="mb-1 block text-xs text-ink-400">備考（任意）</label>
                 <input v-model="manualNotes" type="text" class="field" placeholder="例：○○顧客訪問" />
               </div>
+              <div class="col-span-2">
+                <label class="flex items-center gap-2 text-sm text-ink-600">
+                  <input v-model="manualHasReceipt" type="checkbox" />
+                  領収書あり（Excelに「〇」が入ります）
+                </label>
+              </div>
             </div>
 
             <p v-if="saveError" class="text-sm text-red-500">{{ saveError }}</p>
-
             <button class="btn-primary w-full" :disabled="saving" @click="saveManual">
               {{ saving ? '保存中…' : '保存する' }}
             </button>
