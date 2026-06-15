@@ -7,6 +7,7 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { db } from '~/server/utils/firestore'
 import { appDataPath } from '~/server/utils/permissions'
+import type { QuizTarget } from './config'
 
 const APP_ID = 'exam-prep'
 
@@ -28,6 +29,8 @@ export interface SessionState {
   attempts: Record<string, number>
   totalAttempts: number
   questions: SessionQuestion[]
+  /** まだ生成していない出題対象(topup で後から questions に変わる)。サクッと開始するため */
+  pending?: QuizTarget[]
 }
 
 export interface ExamProfile {
@@ -227,7 +230,11 @@ export async function readCorrectProgress(uid: string, limit = 1000) {
   const snap = await progressCol(uid).where('isCorrect', '==', true).limit(limit).get()
   return snap.docs.map((d) => {
     const x = d.data() as any
-    return { questionId: x.questionId as string, categoryId: x.categoryId as string }
+    return {
+      questionId: x.questionId as string,
+      categoryId: x.categoryId as string,
+      topic: (x.topic as string) ?? '',
+    }
   })
 }
 
@@ -251,15 +258,45 @@ export async function listPeers(limitN = 20) {
 }
 
 export function presentSession(s: SessionState) {
+  const pending = s.pending?.length ?? 0
   const nextId = s.queue[0] ?? null
   const next = nextId ? s.questions.find((q) => q.questionId === nextId) ?? null : null
   return {
-    total: s.questions.length,
+    total: s.questions.length + pending, // 後追い生成分を含む最終目標数
     unique: s.correct.length,
     totalAttempts: s.totalAttempts,
-    done: s.queue.length === 0,
+    pending,
+    done: s.queue.length === 0 && pending === 0,
     next,
   }
+}
+
+/** topup:後から生成した問題をセッションに追加(pending は必ずクリア)。answer と競合しないよう txn。 */
+export async function appendSessionQuestions(
+  uid: string,
+  add: SessionQuestion[],
+): Promise<SessionState | null> {
+  const ref = profileRef(uid)
+  let result: SessionState | null = null
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(ref)
+    const d = snap.data() || {}
+    const session: SessionState | null = d.currentSession ?? null
+    if (!session) {
+      result = null
+      return
+    }
+    const existing = new Set(session.questions.map((q) => q.questionId))
+    for (const q of add) {
+      if (existing.has(q.questionId)) continue
+      session.questions.push(q)
+      session.queue.push(q.questionId)
+    }
+    session.pending = [] // 生成できた数に関わらずクリア(stuck 防止)
+    t.set(ref, { currentSession: session, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+    result = session
+  })
+  return result
 }
 
 // ---- 管理(superuser):ユーザーの業種(quizId)割り当て ----

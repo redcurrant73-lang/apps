@@ -92,6 +92,16 @@ const answered = ref<{
 const lastDone = ref(false)
 const lastNext = ref<any | null>(null)
 const freeAnswer = ref('')
+const preparing = ref(false)
+
+const fireTopup = async () => {
+  try {
+    const r = await $api('/api/apps/exam-prep/session/topup', { method: 'POST', body: {} })
+    return r.session
+  } catch {
+    return null
+  }
+}
 
 const startSession = async (categoryId?: string) => {
   if (starting.value) return
@@ -107,7 +117,10 @@ const startSession = async (categoryId?: string) => {
     answered.value = null
     selected.value = null
     freeAnswer.value = ''
+    preparing.value = false
     view.value = 'session'
+    // 残り(後追い分)を背景で生成 → 最初の数問を解く間に揃う
+    if ((res.session.pending ?? 0) > 0) fireTopup()
   } catch (e: any) {
     errorMsg.value = e?.data?.message || '出題を開始できませんでした'
   } finally {
@@ -143,14 +156,43 @@ const submit = async (userAnswer: string) => {
 }
 
 const next = async () => {
+  answered.value = null
+  selected.value = null
+  freeAnswer.value = ''
   if (lastDone.value) {
     await endSession()
     return
   }
-  current.value = lastNext.value
-  answered.value = null
-  selected.value = null
-  freeAnswer.value = ''
+  if (lastNext.value) {
+    current.value = lastNext.value
+    return
+  }
+  // 次がまだ生成途中(後追い)→ 準備中表示して待つ
+  current.value = null
+  preparing.value = true
+  await ensureNext(0)
+}
+
+const ensureNext = async (tries: number) => {
+  const s = await fireTopup()
+  if (s?.next) {
+    current.value = s.next
+    progress.value = { unique: s.unique, total: s.total }
+    preparing.value = false
+    return
+  }
+  if (s && s.done) {
+    preparing.value = false
+    await endSession()
+    return
+  }
+  if (tries < 6) {
+    setTimeout(() => ensureNext(tries + 1), 1200)
+    return
+  }
+  // あきらめ:今あるところで終了
+  preparing.value = false
+  await endSession()
 }
 
 const summary = ref<any | null>(null)
@@ -364,7 +406,7 @@ const optionClass = (opt: string) => {
           </template>
 
           <!-- ===== SESSION ===== -->
-          <template v-else-if="view === 'session' && current">
+          <template v-else-if="view === 'session'">
             <div class="flex items-center gap-3">
               <button class="btn-icon" aria-label="やめる" @click="quitSession"><Icon name="close" size="22" /></button>
               <div class="h-2 flex-1 overflow-hidden rounded-full bg-ink-200">
@@ -373,6 +415,14 @@ const optionClass = (opt: string) => {
               <span class="text-sm font-medium text-ink-500">{{ progress.unique }}/{{ progress.total }}</span>
             </div>
 
+            <div
+              v-if="!current && preparing"
+              class="card flex items-center justify-center gap-2 py-10 text-ink-400"
+            >
+              <Icon name="hourglass_empty" size="20" />次の問題を準備中…
+            </div>
+
+            <template v-if="current">
             <div class="card">
               <span class="inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600">{{ current.categoryTitle }}</span>
               <p class="mt-3 whitespace-pre-wrap text-base leading-relaxed text-ink-800">{{ current.question }}</p>
@@ -417,6 +467,7 @@ const optionClass = (opt: string) => {
                 <span>{{ lastDone ? '結果を見る' : '次へ' }}</span><Icon name="arrow_forward" size="18" />
               </button>
             </div>
+            </template>
             <p v-if="errorMsg" class="text-center text-sm text-red-600">{{ errorMsg }}</p>
           </template>
 
