@@ -1,19 +1,22 @@
-// (superuser)ユーザーに業種(クイズ)を割り当てる。空/null で未割り当てに戻す。
+// (superuser)ユーザーに使える学習内容(role = 複数可)を割り当てる。
+// roles から外れたら現在の学習内容を付け替え、その場合は進行中セッションをクリア。
 import { isValidQuizId } from '~/server/utils/exam-prep/config'
-import { setUserQuiz } from '~/server/utils/exam-prep/store'
+import { getProfile, setUserRoles } from '~/server/utils/exam-prep/store'
 
 export default defineEventHandler(async (event) => {
   await requireSuperuser(event)
   const body = await readBody(event)
   const uid = String(body?.uid ?? '')
-  const raw = body?.quizId
   if (!uid) throw createError({ statusCode: 400, message: 'uid が必要です' })
 
-  let quizId: string | null = null
-  if (raw && String(raw).trim()) {
-    quizId = String(raw)
-    if (!isValidQuizId(quizId)) throw createError({ statusCode: 400, message: '不明なクイズです' })
-  }
-  await setUserQuiz(uid, quizId)
-  return { ok: true, uid, quizId }
+  const roles = Array.isArray(body?.roles)
+    ? [...new Set(body.roles.map((r: any) => String(r)).filter((r: string) => isValidQuizId(r)))]
+    : []
+
+  const target = await getProfile(uid)
+  const cur = target?.currentQuizId ?? null
+  const newCurrent = cur && roles.includes(cur) ? cur : (roles[0] ?? null)
+  await setUserRoles(uid, roles, newCurrent, newCurrent !== cur)
+
+  return { ok: true, uid, roles }
 })

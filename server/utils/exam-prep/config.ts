@@ -124,6 +124,11 @@ export function listQuizzes() {
   return QUIZZES.map((q) => ({ id: q.id, title: q.title, occupation: q.occupation }))
 }
 
+/** すべてのクイズID(= role の一覧)。superuser は全 role を持つ扱い。 */
+export function allQuizIds(): string[] {
+  return QUIZZES.map((q) => q.id)
+}
+
 export function isValidQuizId(quizId: string): boolean {
   return QUIZZES.some((q) => q.id === quizId)
 }

@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
   let isCorrect = false
   let aiReason: string | undefined
   if (q.type === 'free') {
-    const quiz = getQuiz(profile!.quizId)
+    const quiz = getQuiz(profile!.currentQuizId)
     const g = await gradeAnswerByAI({
       aiSubject: quiz.title,
       question: q.question,

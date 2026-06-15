@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// (superuser専用)各ユーザーに業種(クイズ)を割り当てる画面。
+// (superuser専用)各ユーザーに使える学習内容(role = 複数可)を割り当てる。
 const { $api } = useNuxtApp() as any
 const { ready, user, isSuperuser } = useAuth()
 
@@ -42,16 +42,17 @@ watch(
   { immediate: true },
 )
 
-const assign = async (u: any, quizId: string) => {
+const toggleRole = async (u: any, quizId: string, checked: boolean) => {
+  const set = new Set<string>(u.roles || [])
+  if (checked) set.add(quizId)
+  else set.delete(quizId)
+  const roles = [...set]
   savingUid.value = u.uid
   savedUid.value = null
   errorMsg.value = ''
   try {
-    await $api('/api/apps/exam-prep/admin/assign', {
-      method: 'POST',
-      body: { uid: u.uid, quizId: quizId || null },
-    })
-    u.quizId = quizId || null
+    await $api('/api/apps/exam-prep/admin/assign', { method: 'POST', body: { uid: u.uid, roles } })
+    u.roles = roles
     savedUid.value = u.uid
     setTimeout(() => {
       if (savedUid.value === u.uid) savedUid.value = null
@@ -62,14 +63,11 @@ const assign = async (u: any, quizId: string) => {
     savingUid.value = null
   }
 }
-
-const quizTitle = (id: string | null) =>
-  quizzes.value.find((q) => q.id === id)?.title || '未割り当て'
 </script>
 
 <template>
   <div class="flex min-h-dvh flex-col bg-ink-50">
-    <AppHeader title="業種の割り当て" back="/apps/exam-prep" />
+    <AppHeader title="学習内容の割り当て" back="/apps/exam-prep" />
     <main class="flex-1 overflow-y-auto px-4 py-4">
       <div class="mx-auto max-w-xl space-y-3">
         <div v-if="loading" class="py-10 text-center text-ink-400">読み込み中…</div>
@@ -85,7 +83,7 @@ const quizTitle = (id: string | null) =>
 
         <template v-else>
           <p class="text-sm text-ink-500">
-            この人がどの業種(学習内容)を勉強するかを設定します。変更すると、その人のレベルと進行中のセッションはリセットされます。
+            この人が使える学習内容(role)をチェックで選びます(複数OK)。チェックを外して今やっている内容が無くなった場合だけ、その人の進行中セッションがリセットされます。
           </p>
 
           <div v-for="u in users" :key="u.uid" class="card">
@@ -97,31 +95,37 @@ const quizTitle = (id: string | null) =>
                   <span v-if="u.role !== 'user'" class="ml-1 rounded bg-ink-100 px-1 text-ink-500">{{ u.role }}</span>
                 </p>
               </div>
-              <span class="shrink-0 text-xs text-ink-400">{{ u.totalAnswers }}問</span>
-            </div>
-            <div class="mt-2 flex items-center gap-2">
-              <select
-                class="field flex-1"
-                :value="u.quizId || ''"
-                :disabled="savingUid === u.uid"
-                @change="assign(u, ($event.target as HTMLSelectElement).value)"
-              >
-                <option value="">未割り当て</option>
-                <option v-for="q in quizzes" :key="q.id" :value="q.id">{{ q.title }}</option>
-              </select>
-              <span v-if="savingUid === u.uid" class="text-xs text-ink-400">保存中…</span>
+              <span v-if="savingUid === u.uid" class="shrink-0 text-xs text-ink-400">保存中…</span>
               <Icon
                 v-else-if="savedUid === u.uid"
                 name="check_circle"
                 size="20"
-                class="text-emerald-600"
+                class="shrink-0 text-emerald-600"
               />
             </div>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <label
+                v-for="q in quizzes"
+                :key="q.id"
+                class="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-sm"
+                :class="(u.roles || []).includes(q.id) ? 'border-brand bg-brand-50 text-brand-700' : 'border-ink-200 text-ink-600'"
+              >
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 accent-brand"
+                  :checked="(u.roles || []).includes(q.id)"
+                  :disabled="savingUid === u.uid"
+                  @change="toggleRole(u, q.id, ($event.target as HTMLInputElement).checked)"
+                />
+                {{ q.title }}
+              </label>
+            </div>
+            <p v-if="u.role === 'superuser'" class="mt-1 text-xs text-ink-400">
+              ※ 管理者はチェックに関係なく全部使えます
+            </p>
           </div>
 
-          <p v-if="!users.length" class="py-6 text-center text-sm text-ink-400">
-            ユーザーがいません
-          </p>
+          <p v-if="!users.length" class="py-6 text-center text-sm text-ink-400">ユーザーがいません</p>
           <p v-if="errorMsg" class="text-center text-sm text-red-600">{{ errorMsg }}</p>
         </template>
       </div>

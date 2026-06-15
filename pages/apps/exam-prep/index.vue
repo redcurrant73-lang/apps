@@ -22,10 +22,12 @@ const errorMsg = ref('')
 
 interface Me {
   quiz: any
+  noContent?: boolean
+  mySubjects?: { id: string; title: string }[]
+  currentQuizId?: string | null
   profile: any
   stats: { byCategory: any[]; streak: number; last7: { day: string; studied: boolean }[] }
   activeSession: any
-  switcher?: { quizzes: { id: string; title: string }[]; currentQuizId: string } | null
 }
 const me = ref<Me | null>(null)
 
@@ -45,7 +47,7 @@ onMounted(loadMe)
 // superuser:課題(クイズ)切り替え(各業種のUI確認用)
 const switching = ref(false)
 const switchQuiz = async (quizId: string) => {
-  if (switching.value || quizId === me.value?.switcher?.currentQuizId) return
+  if (switching.value || quizId === me.value?.currentQuizId) return
   switching.value = true
   errorMsg.value = ''
   try {
@@ -356,36 +358,30 @@ const optionClass = (opt: string) => {
         <template v-else-if="me">
           <!-- ===== HOME ===== -->
           <template v-if="view === 'home'">
-            <!-- ===== 管理者メニュー(superuser のみ表示)===== -->
-            <div v-if="me.switcher" class="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <p class="flex items-center gap-1.5 text-xs font-semibold text-amber-700">
-                <Icon name="admin_panel_settings" size="16" />管理者メニュー(ほかの人には表示されません)
-              </p>
-              <div class="flex items-center gap-2">
-                <span class="shrink-0 text-sm text-ink-700">課題を切替</span>
-                <select
-                  class="field ml-auto w-auto"
-                  :value="me.switcher.currentQuizId"
-                  :disabled="switching"
-                  @change="switchQuiz(($event.target as HTMLSelectElement).value)"
-                >
-                  <option v-for="q in me.switcher.quizzes" :key="q.id" :value="q.id">{{ q.title }}</option>
-                </select>
-              </div>
-              <NuxtLink
-                to="/apps/exam-prep/admin"
-                class="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm font-medium text-ink-700"
+            <!-- 学習内容が未割り当て -->
+            <div v-if="me.noContent" class="card text-center text-ink-600">
+              <span
+                class="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-ink-100 text-ink-500"
               >
-                <span class="flex items-center gap-2"><Icon name="manage_accounts" size="18" />業種の割り当て</span>
-                <Icon name="chevron_right" size="18" class="text-ink-300" />
-              </NuxtLink>
-              <button
-                class="flex w-full items-center justify-center gap-1 rounded-xl border border-red-200 bg-white py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-                :disabled="resetting"
-                @click="resetQuestions"
+                <Icon name="school" size="28" />
+              </span>
+              <p>学習内容がまだ割り当てられていません。</p>
+              <p class="mt-1 text-sm text-ink-400">管理者に設定してもらってください。</p>
+            </div>
+
+            <template v-else>
+            <!-- 学習内容ピッカー(2つ以上あれば切替)-->
+            <div v-if="(me.mySubjects?.length || 0) > 1" class="card flex items-center gap-2">
+              <Icon name="menu_book" size="20" class="shrink-0 text-ink-500" />
+              <span class="shrink-0 text-sm text-ink-600">学習内容</span>
+              <select
+                class="field ml-auto w-auto"
+                :value="me.currentQuizId"
+                :disabled="switching"
+                @change="switchQuiz(($event.target as HTMLSelectElement).value)"
               >
-                <Icon name="delete_sweep" size="18" />この課題の問題を全部消して作り直す
-              </button>
+                <option v-for="s in me.mySubjects" :key="s.id" :value="s.id">{{ s.title }}</option>
+              </select>
             </div>
 
             <!-- カウントダウン or タイトル -->
@@ -502,6 +498,28 @@ const optionClass = (opt: string) => {
                 <p v-else-if="peers" class="py-2 text-center text-sm text-ink-400">まだ誰も表示していません</p>
               </div>
             </div>
+
+            <!-- ===== 管理者メニュー(superuser のみ表示)===== -->
+            <div v-if="isSuperuser" class="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p class="flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+                <Icon name="admin_panel_settings" size="16" />管理者メニュー(ほかの人には表示されません)
+              </p>
+              <NuxtLink
+                to="/apps/exam-prep/admin"
+                class="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm font-medium text-ink-700"
+              >
+                <span class="flex items-center gap-2"><Icon name="manage_accounts" size="18" />学習内容の割り当て</span>
+                <Icon name="chevron_right" size="18" class="text-ink-300" />
+              </NuxtLink>
+              <button
+                class="flex w-full items-center justify-center gap-1 rounded-xl border border-red-200 bg-white py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                :disabled="resetting"
+                @click="resetQuestions"
+              >
+                <Icon name="delete_sweep" size="18" />この学習内容の問題を全部消して作り直す
+              </button>
+            </div>
+            </template>
           </template>
 
           <!-- ===== SESSION ===== -->

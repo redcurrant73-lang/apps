@@ -34,7 +34,10 @@ export interface SessionState {
 }
 
 export interface ExamProfile {
-  quizId: string | null
+  /** 使える学習内容(role = quizId の配列)。superuser は全 role を持つ扱い(store では空でも可) */
+  roles: string[]
+  /** いま学習中の学習内容(roles のいずれか) */
+  currentQuizId: string | null
   level: number
   totalCorrect: number
   totalAnswers: number
@@ -76,7 +79,9 @@ function usersCol() {
 
 function readProfile(d: Record<string, any>): ExamProfile {
   return {
-    quizId: d.quizId ?? null,
+    // 旧 quizId(単一)からの移行:roles 未設定なら quizId を1件の role として扱う
+    roles: Array.isArray(d.roles) ? d.roles : d.quizId ? [d.quizId] : [],
+    currentQuizId: d.currentQuizId ?? d.quizId ?? null,
     level: typeof d.level === 'number' ? d.level : 1,
     totalCorrect: d.totalCorrect ?? 0,
     totalAnswers: d.totalAnswers ?? 0,
@@ -98,7 +103,8 @@ export async function ensureProfile(decoded: { uid: string; name?: string }): Pr
   if (!snap.exists) {
     await ref.set(
       {
-        quizId: null,
+        roles: [],
+        currentQuizId: null,
         level: 1,
         totalCorrect: 0,
         totalAnswers: 0,
@@ -299,11 +305,35 @@ export async function appendSessionQuestions(
   return result
 }
 
-// ---- 管理(superuser):ユーザーの業種(quizId)割り当て ----
-export async function setUserQuiz(uid: string, quizId: string | null) {
-  // 業種が変わると進捗の前提が変わるので、進行中セッションとレベルはリセット
+// ---- 学習内容(role)の割り当て・切り替え ----
+/** superuser: ユーザーに使える学習内容(roles)を設定。currentQuizId が roles 外なら付け替え。 */
+export async function setUserRoles(
+  uid: string,
+  roles: string[],
+  currentQuizId: string | null,
+  clearSession: boolean,
+) {
+  const patch: Record<string, any> = {
+    roles,
+    currentQuizId,
+    updatedAt: FieldValue.serverTimestamp(),
+  }
+  if (clearSession) patch.currentSession = null
+  await profileRef(uid).set(patch, { merge: true })
+}
+
+/** 本人 or superuser: 学習中の学習内容を切り替え(進行中セッションはクリア・レベルは保持) */
+export async function setCurrentQuiz(uid: string, quizId: string) {
   await profileRef(uid).set(
-    { quizId, level: 1, currentSession: null, updatedAt: FieldValue.serverTimestamp() },
+    { currentQuizId: quizId, currentSession: null, updatedAt: FieldValue.serverTimestamp() },
+    { merge: true },
+  )
+}
+
+/** getMe が解決した currentQuizId を永続化(セッションは消さない) */
+export async function persistCurrentQuiz(uid: string, quizId: string) {
+  await profileRef(uid).set(
+    { currentQuizId: quizId, updatedAt: FieldValue.serverTimestamp() },
     { merge: true },
   )
 }
@@ -362,7 +392,7 @@ export async function listAssignments() {
       email: u.email ?? '',
       displayName: u.displayName ?? '',
       role: u.role ?? 'user',
-      quizId: (ex.quizId as string) ?? null,
+      roles: Array.isArray(ex.roles) ? (ex.roles as string[]) : ex.quizId ? [ex.quizId] : [],
       totalAnswers: (ex.totalAnswers as number) ?? 0,
     }
   })

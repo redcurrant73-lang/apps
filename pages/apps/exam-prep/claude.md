@@ -45,13 +45,14 @@ AI 出題の一問一答ドリル。**複数の業種(クイズ)を1つのアプ
 | visibility | assignable(招待制。superuser は自動表示。owner は permissions.ts の OWNER_VISIBLE_APPS で例外的に表示)|
 | requiredApis | gemini |
 
-- アクセス権(誰が使えるか)= 設定→アクセス権(`appAccess`)。
-- 業種の割り当て(誰がどのクイズか)= アプリ内 `/apps/exam-prep/admin`(superuser 専用)。`apps/exam-prep/users/{uid}.quizId`。
-  未割り当ては `DEFAULT_QUIZ_ID`(omotenashi)にフォールバック。割り当て変更でレベル・進行中セッションはリセット。
+- アクセス権(アプリを開けるか)= 設定→アクセス権(`appAccess`)。
+- **学習内容(role)の割り当て**:各クイズ id が role。superuser がアプリ内 `/apps/exam-prep/admin` で各ユーザーに **複数** 付与(`apps/exam-prep/users/{uid}.roles: string[]`)。
+  superuser は全 role を持つ扱い。未割り当て(roles 空・非superuser)は noContent(出題不可、案内表示)。
+- `currentQuizId` = いま学習中のクイズ(roles のいずれか)。本人/superuser が `/switch` で切替(進行中セッションはクリア・レベルは保持)。getMe が roles から解決して永続化。
 
 ## データ配置(Firestore)
 
-- `apps/exam-prep/users/{uid}` … `quizId / level / totalCorrect / totalAnswers / visibleToPeers / displayName / currentSession`
+- `apps/exam-prep/users/{uid}` … `roles[] / currentQuizId / level / totalCorrect / totalAnswers / visibleToPeers / displayName / currentSession`
 - `apps/exam-prep/users/{uid}/progress/{auto}` … `{ questionId, isCorrect, userAnswer, attempts, categoryId, topic, answeredAt }`(append-only)
 - `apps/exam-prep/questions/{auto}` … 問題プール。`{ ..., quizId, categoryId, topic, promptVersion, source, createdAt }`
 
@@ -62,13 +63,17 @@ AI 出題の一問一答ドリル。**複数の業種(クイズ)を1つのアプ
 | メソッド | パス | 役割 |
 |---|---|---|
 | GET | `/me` | 割り当てクイズ+カテゴリ別達成率+streak+7日+カウントダウン+進行中セッション |
-| POST | `/profile` | 表示名・ランキング表示のみ(業種は本人から変えない)|
-| POST | `/session/start` | 10問選定。`{categoryId}` で集中。弱点カテゴリ重み付け。現行 promptVersion のプール優先→不足分 AI バッチ生成 |
+| POST | `/profile` | 表示名・ランキング表示のみ |
+| POST | `/switch` | 学習中の内容を切替(自分の role 内 or superuser)。`{quizId}`。セッションはクリア |
+| POST | `/session/start` | 最初の数問(FIRST_BATCH=4)だけ用意して即開始、残りは pending。`{categoryId}` で集中。トピック未出題優先 |
+| POST | `/session/topup` | pending を生成してセッションに追加(クライアントが開始直後に背景で呼ぶ)|
 | POST | `/session/answer` | choice 完全一致 / free は AI 採点。progress + カウンタ |
 | POST | `/session/end` | 総回答数でレベル ±1。セッションクリア |
 | GET | `/peers` | ランキング(visibleToPeers=true)|
-| GET | `/admin/users` | (superuser)全ユーザーの割り当て状況 + クイズ一覧 |
-| POST | `/admin/assign` | (superuser)`{uid, quizId}` 業種を割り当て(null で解除)|
+| GET | `/admin/users` | (superuser)全ユーザーの roles 割り当て + クイズ一覧 |
+| POST | `/admin/assign` | (superuser)`{uid, roles[]}` 学習内容(role)を複数割り当て |
+| POST | `/admin/delete-question` | (superuser)出題中の1問を削除+セッションから除外 |
+| POST | `/admin/reset-questions` | (superuser)その学習内容の問題を全削除(作り直し)|
 
 ## AI(`ai.ts` / コスト注意)
 
@@ -78,8 +83,8 @@ AI 出題の一問一答ドリル。**複数の業種(クイズ)を1つのアプ
 
 ## UI
 
-- `index.vue`:ホーム/セッション/サマリ。カウントダウン(examDate があれば)/レベル・習得率・連続学習/7日ドット/10問チャレンジ/カテゴリ別レーダー+バー(タップで集中)/ランキング/管理リンク(superuser)。オンボーディングは無し(業種は割り当て制)。
-- `admin.vue`:(superuser)ユーザー→業種の割り当てのみ。
+- `index.vue`:ホーム/セッション/サマリ。未割り当ては案内表示。**複数 role があれば学習内容ピッカー(select)**。カウントダウン/レベル・習得率・連続学習/7日/10問チャレンジ/カテゴリ別レーダー+バー(集中)/ランキング/**管理者メニュー(amber枠・superuser のみ:割り当て・問題リセット)**。出題中の「管理者:削除」も superuser のみ。
+- `admin.vue`:(superuser)ユーザー→学習内容(role)を **チェックボックスで複数割り当て**。
 - 左上に `v.{short_sha}`(deploy で `NUXT_PUBLIC_GIT_SHA`)。
 
 ## 実装状況

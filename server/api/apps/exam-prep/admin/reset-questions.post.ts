@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const decoded = await requireSuperuser(event)
   const body = await readBody(event).catch(() => ({}))
   const profile = await getProfile(decoded.uid)
-  const quizId = body?.quizId ? String(body.quizId) : getQuiz(profile?.quizId).id
+  const quizId = body?.quizId ? String(body.quizId) : getQuiz(profile?.currentQuizId).id
 
   const deleted = await wipeQuestionsForQuiz(quizId)
   return { ok: true, quizId, deleted }
