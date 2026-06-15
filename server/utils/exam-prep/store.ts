@@ -308,6 +308,44 @@ export async function setUserQuiz(uid: string, quizId: string | null) {
   )
 }
 
+// ---- 問題の削除(superuser)----
+/** 1問をプールから削除し、呼び出し本人の進行中セッションからも取り除く */
+export async function deleteQuestion(uid: string, questionId: string): Promise<SessionState | null> {
+  await questionsCol().doc(questionId).delete().catch(() => {})
+  const ref = profileRef(uid)
+  let result: SessionState | null = null
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(ref)
+    const session: SessionState | null = snap.data()?.currentSession ?? null
+    if (!session) {
+      result = null
+      return
+    }
+    session.queue = session.queue.filter((id) => id !== questionId)
+    session.correct = session.correct.filter((id) => id !== questionId)
+    session.questions = session.questions.filter((q) => q.questionId !== questionId)
+    if (session.attempts) delete session.attempts[questionId]
+    t.set(ref, { currentSession: session, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+    result = session
+  })
+  return result
+}
+
+/** ある業種(クイズ)の問題を全部消す。バッチで繰り返し削除。返り値は削除件数。 */
+export async function wipeQuestionsForQuiz(quizId: string): Promise<number> {
+  let total = 0
+  for (let i = 0; i < 20; i++) {
+    const snap = await questionsCol().where('quizId', '==', quizId).limit(300).get()
+    if (snap.empty) break
+    const batch = db.batch()
+    snap.docs.forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+    total += snap.size
+    if (snap.size < 300) break
+  }
+  return total
+}
+
 /** ポータル全ユーザー + exam-prep の割り当て状況をまとめて返す */
 export async function listAssignments() {
   const [portalSnap, examSnap] = await Promise.all([

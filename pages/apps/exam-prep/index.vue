@@ -58,6 +58,24 @@ const switchQuiz = async (quizId: string) => {
   }
 }
 
+// superuser:この課題の問題を全部消して作り直す
+const resetting = ref(false)
+const resetQuestions = async () => {
+  if (resetting.value) return
+  if (!confirm('この課題のAI生成問題を全部消して作り直します。よろしいですか?')) return
+  resetting.value = true
+  errorMsg.value = ''
+  try {
+    const r = await $api('/api/apps/exam-prep/admin/reset-questions', { method: 'POST', body: {} })
+    alert(`${r.deleted}問を削除しました。次の出題から新しく作り直されます。`)
+    await loadMe()
+  } catch (e: any) {
+    errorMsg.value = e?.data?.message || 'リセットに失敗しました'
+  } finally {
+    resetting.value = false
+  }
+}
+
 const masteryPct = computed(() => {
   const p = me.value?.profile
   return p && p.totalAnswers ? Math.round((p.totalCorrect / p.totalAnswers) * 100) : 0
@@ -212,6 +230,47 @@ const ensureNext = async (tries: number) => {
   await endSession()
 }
 
+// セッションの状態(presentSession)を受け取って次の問題へ進める
+const applyNext = async (session: any) => {
+  answered.value = null
+  selected.value = null
+  freeAnswer.value = ''
+  if (!session) {
+    await backHome()
+    return
+  }
+  progress.value = { unique: session.unique, total: session.total }
+  if (session.done) {
+    await endSession()
+    return
+  }
+  if (session.next) {
+    current.value = session.next
+    return
+  }
+  current.value = null
+  preparing.value = true
+  await ensureNext(0)
+}
+
+// superuser:出題中の低品質な問題を削除して次へ
+const deleting = ref(false)
+const deleteCurrent = async () => {
+  if (deleting.value || !current.value) return
+  deleting.value = true
+  try {
+    const res = await $api('/api/apps/exam-prep/admin/delete-question', {
+      method: 'POST',
+      body: { questionId: current.value.questionId },
+    })
+    await applyNext(res.session)
+  } catch (e: any) {
+    errorMsg.value = e?.data?.message || '削除に失敗しました'
+  } finally {
+    deleting.value = false
+  }
+}
+
 const summary = ref<any | null>(null)
 const endSession = async () => {
   try {
@@ -297,18 +356,27 @@ const optionClass = (opt: string) => {
         <template v-else-if="me">
           <!-- ===== HOME ===== -->
           <template v-if="view === 'home'">
-            <!-- superuser:課題の切り替え(各業種のUI確認) -->
-            <div v-if="me.switcher" class="card flex items-center gap-2">
-              <Icon name="swap_horiz" size="20" class="shrink-0 text-ink-500" />
-              <span class="shrink-0 text-sm text-ink-600">課題を切替(管理)</span>
-              <select
-                class="field ml-auto w-auto"
-                :value="me.switcher.currentQuizId"
-                :disabled="switching"
-                @change="switchQuiz(($event.target as HTMLSelectElement).value)"
+            <!-- superuser:課題の切り替え + 問題リセット(管理) -->
+            <div v-if="me.switcher" class="card space-y-2">
+              <div class="flex items-center gap-2">
+                <Icon name="swap_horiz" size="20" class="shrink-0 text-ink-500" />
+                <span class="shrink-0 text-sm text-ink-600">課題を切替(管理)</span>
+                <select
+                  class="field ml-auto w-auto"
+                  :value="me.switcher.currentQuizId"
+                  :disabled="switching"
+                  @change="switchQuiz(($event.target as HTMLSelectElement).value)"
+                >
+                  <option v-for="q in me.switcher.quizzes" :key="q.id" :value="q.id">{{ q.title }}</option>
+                </select>
+              </div>
+              <button
+                class="flex w-full items-center justify-center gap-1 rounded-xl py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                :disabled="resetting"
+                @click="resetQuestions"
               >
-                <option v-for="q in me.switcher.quizzes" :key="q.id" :value="q.id">{{ q.title }}</option>
-              </select>
+                <Icon name="delete_sweep" size="18" />この課題の問題を全部消して作り直す
+              </button>
             </div>
 
             <!-- カウントダウン or タイトル -->
@@ -455,7 +523,17 @@ const optionClass = (opt: string) => {
 
             <template v-if="current">
             <div class="card">
-              <span class="inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600">{{ current.categoryTitle }}</span>
+              <div class="flex items-center justify-between gap-2">
+                <span class="inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600">{{ current.categoryTitle }}</span>
+                <button
+                  v-if="isSuperuser"
+                  class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-red-500 hover:bg-red-50 disabled:opacity-50"
+                  :disabled="deleting"
+                  @click="deleteCurrent"
+                >
+                  <Icon name="delete" size="16" />この問題を削除
+                </button>
+              </div>
               <p class="mt-3 whitespace-pre-wrap text-base leading-relaxed text-ink-800">{{ current.question }}</p>
             </div>
 
