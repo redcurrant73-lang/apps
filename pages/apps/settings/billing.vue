@@ -40,7 +40,13 @@ onMounted(load)
       <template v-else-if="data">
         <div class="card">
           <p class="text-sm text-slate-500">{{ data.usage.month }} のAI使用量</p>
-          <div class="mt-2 grid grid-cols-3 gap-3 text-center">
+          <div class="mt-1 flex items-baseline gap-2">
+            <span class="text-4xl font-bold text-slate-900"
+              >¥{{ Math.round(data.usage.estimatedCostJpy).toLocaleString() }}</span
+            >
+            <span class="text-sm text-slate-500">推定AI料金</span>
+          </div>
+          <div class="mt-3 grid grid-cols-3 gap-3 text-center">
             <div>
               <p class="text-2xl font-bold text-slate-900">{{ data.usage.geminiCalls }}</p>
               <p class="text-xs text-slate-500">呼び出し回数</p>
@@ -68,17 +74,21 @@ onMounted(load)
         </div>
 
         <div v-if="data.usage.days?.length" class="card">
-          <p class="mb-2 text-sm font-medium text-slate-700">日別のAI呼び出し</p>
+          <p class="mb-2 text-sm font-medium text-slate-700">日別のAI呼び出し・料金</p>
           <div
             v-for="d in data.usage.days"
             :key="d.date"
             class="flex justify-between border-t border-slate-100 py-1 text-sm first:border-0"
           >
             <span class="text-slate-500">{{ d.date }}</span>
-            <span class="text-slate-800">{{ d.geminiCalls }}</span>
+            <span class="text-slate-800"
+              >{{ d.geminiCalls }}回
+              <span class="ml-1 text-slate-400">¥{{ Math.round(d.costJpy).toLocaleString() }}</span></span
+            >
           </div>
         </div>
 
+        <p class="px-1 text-xs text-slate-400">{{ data.usage.priceNote }}</p>
         <p class="px-1 text-xs text-slate-400">{{ data.usage.costNote }}</p>
       </template>
     </main>

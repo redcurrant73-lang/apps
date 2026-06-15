@@ -12,8 +12,24 @@ export interface UsageSummary {
   geminiCalls: number
   geminiTokensIn: number
   geminiTokensOut: number
-  days: { date: string; geminiCalls: number }[]
+  /** 当月の推定AI料金(円) */
+  estimatedCostJpy: number
+  days: { date: string; geminiCalls: number; costJpy: number }[]
   costNote: string
+  /** 料金の前提(レート)説明 */
+  priceNote: string
+}
+
+// Gemini 2.5 Flash の従量目安(USD / 100万トークン)。料金改定時はここを直す。
+const GEMINI_INPUT_USD_PER_1M = 0.3
+const GEMINI_OUTPUT_USD_PER_1M = 2.5
+const USD_JPY = 155 // 為替の概算(円/$)。必要に応じて調整。
+
+function estimateJpy(tokensIn: number, tokensOut: number): number {
+  const usd =
+    (tokensIn / 1_000_000) * GEMINI_INPUT_USD_PER_1M +
+    (tokensOut / 1_000_000) * GEMINI_OUTPUT_USD_PER_1M
+  return usd * USD_JPY
 }
 
 function currentYearMonth(): string {
@@ -37,7 +53,11 @@ export async function getUsageSummary(): Promise<UsageSummary> {
     geminiCalls += d.geminiCalls || 0
     geminiTokensIn += d.geminiTokensIn || 0
     geminiTokensOut += d.geminiTokensOut || 0
-    days.push({ date: doc.id, geminiCalls: d.geminiCalls || 0 })
+    days.push({
+      date: doc.id,
+      geminiCalls: d.geminiCalls || 0,
+      costJpy: estimateJpy(d.geminiTokensIn || 0, d.geminiTokensOut || 0),
+    })
   })
   days.sort((a, b) => a.date.localeCompare(b.date))
 
@@ -46,8 +66,10 @@ export async function getUsageSummary(): Promise<UsageSummary> {
     geminiCalls,
     geminiTokensIn,
     geminiTokensOut,
+    estimatedCostJpy: estimateJpy(geminiTokensIn, geminiTokensOut),
     days,
     costNote: '実コスト(Cloud Run / Firestore 等)は Cloud Billing の BigQuery エクスポート設定後に表示します。',
+    priceNote: `※ AI料金は Gemini 2.5 Flash の従量目安(入力 $${GEMINI_INPUT_USD_PER_1M} / 出力 $${GEMINI_OUTPUT_USD_PER_1M} per 100万トークン)を約${USD_JPY}円/$で換算した概算です。実際の請求とは差があります。`,
   }
 }
 
