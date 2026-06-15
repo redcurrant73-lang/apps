@@ -356,11 +356,13 @@ const optionClass = (opt: string) => {
         <template v-else-if="me">
           <!-- ===== HOME ===== -->
           <template v-if="view === 'home'">
-            <!-- superuser:課題の切り替え + 問題リセット(管理) -->
-            <div v-if="me.switcher" class="card space-y-2">
+            <!-- ===== 管理者メニュー(superuser のみ表示)===== -->
+            <div v-if="me.switcher" class="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p class="flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+                <Icon name="admin_panel_settings" size="16" />管理者メニュー(ほかの人には表示されません)
+              </p>
               <div class="flex items-center gap-2">
-                <Icon name="swap_horiz" size="20" class="shrink-0 text-ink-500" />
-                <span class="shrink-0 text-sm text-ink-600">課題を切替(管理)</span>
+                <span class="shrink-0 text-sm text-ink-700">課題を切替</span>
                 <select
                   class="field ml-auto w-auto"
                   :value="me.switcher.currentQuizId"
@@ -370,8 +372,15 @@ const optionClass = (opt: string) => {
                   <option v-for="q in me.switcher.quizzes" :key="q.id" :value="q.id">{{ q.title }}</option>
                 </select>
               </div>
+              <NuxtLink
+                to="/apps/exam-prep/admin"
+                class="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm font-medium text-ink-700"
+              >
+                <span class="flex items-center gap-2"><Icon name="manage_accounts" size="18" />業種の割り当て</span>
+                <Icon name="chevron_right" size="18" class="text-ink-300" />
+              </NuxtLink>
               <button
-                class="flex w-full items-center justify-center gap-1 rounded-xl py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                class="flex w-full items-center justify-center gap-1 rounded-xl border border-red-200 bg-white py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
                 :disabled="resetting"
                 @click="resetQuestions"
               >
@@ -493,15 +502,6 @@ const optionClass = (opt: string) => {
                 <p v-else-if="peers" class="py-2 text-center text-sm text-ink-400">まだ誰も表示していません</p>
               </div>
             </div>
-
-            <NuxtLink
-              v-if="isSuperuser"
-              to="/apps/exam-prep/admin"
-              class="card flex items-center justify-between text-sm font-medium text-ink-700"
-            >
-              <span class="flex items-center gap-2"><Icon name="manage_accounts" size="20" />業種の割り当て(管理)</span>
-              <Icon name="chevron_right" size="20" class="text-ink-300" />
-            </NuxtLink>
           </template>
 
           <!-- ===== SESSION ===== -->
@@ -527,11 +527,11 @@ const optionClass = (opt: string) => {
                 <span class="inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600">{{ current.categoryTitle }}</span>
                 <button
                   v-if="isSuperuser"
-                  class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-red-500 hover:bg-red-50 disabled:opacity-50"
+                  class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
                   :disabled="deleting"
                   @click="deleteCurrent"
                 >
-                  <Icon name="delete" size="16" />この問題を削除
+                  <Icon name="admin_panel_settings" size="14" />管理者:削除
                 </button>
               </div>
               <p class="mt-3 whitespace-pre-wrap text-base leading-relaxed text-ink-800">{{ current.question }}</p>
