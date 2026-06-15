@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// 学習対策ドリル(施工管理2級)。ホーム / セッション / サマリ + 初回オンボーディング。
+// 学習対策ドリル(看護師国家試験)。ホーム / セッション / サマリ + 初回オンボーディング。
 // 画面の裏側はすべて /api/apps/exam-prep/* 経由(Firestore 直アクセスはしない)。
 const { $api } = useNuxtApp() as any
-const { ready, user } = useAuth()
+const { ready, user, isSuperuser } = useAuth()
 const config = useRuntimeConfig()
 const sha = String((config.public as any).gitSha || 'dev').slice(0, 7)
 
@@ -26,7 +26,7 @@ interface Me {
   onboardingNeeded: boolean
   needSegment: boolean
   needExamTarget: boolean
-  stats: { byGroup: any[]; streak: number }
+  stats: { byGroup: any[]; streak: number; last7: { day: string; studied: boolean }[] }
   activeSession: any
 }
 const me = ref<Me | null>(null)
@@ -72,6 +72,31 @@ const activeRemaining = computed(() => {
   return s ? Math.max(0, s.total - s.unique) : 0
 })
 
+// ---- レーダーチャート(SVG)----
+const RADIUS = 78
+const CX = 100
+const CY = 100
+const radar = computed(() => {
+  const groups = me.value?.stats?.byGroup || []
+  const n = groups.length
+  if (n < 3) return null
+  const pts = groups.map((g: any, i: number) => {
+    const ang = ((-90 + (360 / n) * i) * Math.PI) / 180
+    const r = (Math.max(0, Math.min(100, g.pct)) / 100) * RADIUS
+    return {
+      x: CX + Math.cos(ang) * r,
+      y: CY + Math.sin(ang) * r,
+      ax: CX + Math.cos(ang) * RADIUS,
+      ay: CY + Math.sin(ang) * RADIUS,
+    }
+  })
+  return {
+    poly: pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '),
+    axes: pts,
+    rings: [0.25, 0.5, 0.75, 1].map((f) => RADIUS * f),
+  }
+})
+
 // ---- onboarding ----
 const obStep = ref(1)
 const obSegment = ref<string | null>(null)
@@ -113,16 +138,21 @@ const answered = ref<{
   answer: string
   explanation: string
   attempts: number
+  aiReason?: string
 } | null>(null)
 const lastDone = ref(false)
 const lastNext = ref<any | null>(null)
 const freeAnswer = ref('')
 
-const startSession = async () => {
+const startSession = async (groupId?: string) => {
+  if (starting.value) return
   starting.value = true
   errorMsg.value = ''
   try {
-    const res = await $api('/api/apps/exam-prep/session/start', { method: 'POST', body: {} })
+    const res = await $api('/api/apps/exam-prep/session/start', {
+      method: 'POST',
+      body: groupId ? { groupId } : {},
+    })
     current.value = res.session.next
     progress.value = { unique: res.session.unique, total: res.session.total }
     answered.value = null
@@ -150,6 +180,7 @@ const submit = async (userAnswer: string) => {
       answer: res.answer,
       explanation: res.explanation,
       attempts: res.attempts,
+      aiReason: res.aiReason,
     }
     progress.value = { unique: res.session.unique, total: res.session.total }
     lastDone.value = res.done
@@ -216,6 +247,38 @@ const toggleVisible = async () => {
     if (peersOpen.value) await loadPeers()
   } catch (e: any) {
     errorMsg.value = e?.data?.message || '更新に失敗しました'
+  }
+}
+
+// ---- maintenance (superuser) ----
+const maint = ref('')
+const maintBusy = ref(false)
+const runSeed = async () => {
+  maintBusy.value = true
+  maint.value = ''
+  try {
+    const r = await $api('/api/apps/exam-prep/admin/seed', { method: 'POST', body: {} })
+    maint.value = `確認済み問題を ${r.added} 件追加しました(全 ${r.total} 件)`
+  } catch (e: any) {
+    maint.value = e?.data?.message || '失敗しました'
+  } finally {
+    maintBusy.value = false
+  }
+}
+const runWipe = async () => {
+  if (!confirm('AIが生成した問題をすべて消します。よろしいですか?')) return
+  maintBusy.value = true
+  maint.value = ''
+  try {
+    const r = await $api('/api/apps/exam-prep/admin/wipe', {
+      method: 'POST',
+      body: { source: 'generated' },
+    })
+    maint.value = `生成問題を ${r.deleted} 件削除しました`
+  } catch (e: any) {
+    maint.value = e?.data?.message || '失敗しました'
+  } finally {
+    maintBusy.value = false
   }
 }
 
@@ -297,10 +360,27 @@ const optionClass = (opt: string) => {
               </div>
             </div>
 
+            <!-- 7日ストリーク -->
+            <div v-if="me.stats.last7?.length" class="card flex items-center justify-between py-3">
+              <span class="text-xs text-ink-400">この7日</span>
+              <div class="flex items-center gap-2">
+                <span
+                  v-for="(d, i) in me.stats.last7"
+                  :key="i"
+                  class="flex h-6 w-6 items-center justify-center rounded-full text-[10px]"
+                  :class="d.studied ? 'bg-brand text-white' : 'bg-ink-100 text-ink-300'"
+                  :title="d.day"
+                >
+                  <Icon v-if="d.studied" name="check" size="14" />
+                  <span v-else>·</span>
+                </span>
+              </div>
+            </div>
+
             <button
               class="btn-primary w-full justify-center gap-2 py-4 text-lg"
               :disabled="starting"
-              @click="startSession"
+              @click="startSession()"
             >
               <Icon name="quiz" size="22" />
               <span v-if="starting">問題を準備中…</span>
@@ -309,20 +389,73 @@ const optionClass = (opt: string) => {
             </button>
             <p v-if="errorMsg" class="text-center text-sm text-red-600">{{ errorMsg }}</p>
 
+            <!-- 分野別 達成率(レーダー + バー / タップで集中セッション)-->
             <div v-if="me.stats.byGroup.length" class="card">
-              <p class="mb-2 text-sm font-medium text-ink-600">分野別の習得(正解数)</p>
-              <div class="space-y-1.5">
-                <div
+              <p class="mb-1 text-sm font-medium text-ink-600">分野別の達成率</p>
+              <p class="mb-2 text-xs text-ink-400">バーをタップでその分野だけ10問(集中)</p>
+
+              <svg v-if="radar" viewBox="0 0 200 200" class="mx-auto mb-3 h-52 w-52">
+                <circle
+                  v-for="(r, i) in radar.rings"
+                  :key="'r' + i"
+                  :cx="CX"
+                  :cy="CY"
+                  :r="r"
+                  fill="none"
+                  stroke="#e2e8f0"
+                  stroke-width="1"
+                />
+                <line
+                  v-for="(a, i) in radar.axes"
+                  :key="'a' + i"
+                  :x1="CX"
+                  :y1="CY"
+                  :x2="a.ax"
+                  :y2="a.ay"
+                  stroke="#e2e8f0"
+                  stroke-width="1"
+                />
+                <polygon
+                  :points="radar.poly"
+                  fill="#0ea5e9"
+                  fill-opacity="0.18"
+                  stroke="#0ea5e9"
+                  stroke-width="2"
+                />
+                <circle
+                  v-for="(a, i) in radar.axes"
+                  :key="'d' + i"
+                  :cx="a.x"
+                  :cy="a.y"
+                  r="2.5"
+                  fill="#0ea5e9"
+                />
+              </svg>
+
+              <div class="space-y-2">
+                <button
                   v-for="g in me.stats.byGroup"
                   :key="g.groupId"
-                  class="flex items-center justify-between text-sm"
+                  class="flex w-full items-center gap-3 rounded-xl px-1 py-1.5 text-left transition hover:bg-ink-50 disabled:opacity-50"
+                  :disabled="starting"
+                  @click="startSession(g.groupId)"
                 >
-                  <span class="text-ink-700">{{ g.title }}</span>
-                  <span class="font-medium text-ink-500">{{ g.correct }}問</span>
-                </div>
+                  <span class="w-28 shrink-0 truncate text-xs text-ink-700">{{ g.title }}</span>
+                  <span class="h-2 flex-1 overflow-hidden rounded-full bg-ink-100">
+                    <span
+                      class="block h-full rounded-full bg-brand"
+                      :style="{ width: g.pct + '%' }"
+                    ></span>
+                  </span>
+                  <span class="w-9 shrink-0 text-right text-xs font-medium text-ink-500"
+                    >{{ g.pct }}%</span
+                  >
+                  <Icon name="chevron_right" size="16" class="shrink-0 text-ink-300" />
+                </button>
               </div>
             </div>
 
+            <!-- ランキング -->
             <div class="card">
               <button class="flex w-full items-center justify-between" @click="togglePeers">
                 <span class="flex items-center gap-2 text-sm font-medium text-ink-700">
@@ -358,6 +491,22 @@ const optionClass = (opt: string) => {
                   まだ誰も表示していません
                 </p>
               </div>
+            </div>
+
+            <!-- メンテナンス(superuser のみ)-->
+            <div v-if="isSuperuser" class="card">
+              <p class="mb-2 flex items-center gap-2 text-sm font-medium text-ink-600">
+                <Icon name="build" size="18" />メンテナンス
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <button class="btn-ghost text-sm" :disabled="maintBusy" @click="runSeed">
+                  確認済み問題を補充
+                </button>
+                <button class="btn-ghost text-sm" :disabled="maintBusy" @click="runWipe">
+                  生成問題をリセット
+                </button>
+              </div>
+              <p v-if="maint" class="mt-2 text-xs text-ink-500">{{ maint }}</p>
             </div>
           </template>
 
@@ -418,9 +567,10 @@ const optionClass = (opt: string) => {
             </div>
 
             <div v-else class="space-y-2">
+              <p class="text-xs text-ink-400">用語を入力して回答(言い換えも正解になります)</p>
               <textarea
                 v-model="freeAnswer"
-                rows="3"
+                rows="2"
                 placeholder="答えを入力…"
                 class="field w-full"
                 :disabled="!!answered"
@@ -430,7 +580,7 @@ const optionClass = (opt: string) => {
                 :disabled="!!answered || submitting || !freeAnswer.trim()"
                 @click="submit(freeAnswer)"
               >
-                回答する
+                {{ submitting ? '採点中…' : '回答する' }}
               </button>
             </div>
 
@@ -449,6 +599,12 @@ const optionClass = (opt: string) => {
                   >— あとでもう一度出ます</span
                 >
               </p>
+              <p v-if="current.type !== 'choice'" class="mt-2 text-sm text-ink-600">
+                正解: <span class="font-medium text-ink-800">{{ answered.answer }}</span>
+              </p>
+              <p v-if="answered.aiReason" class="mt-1 text-xs text-ink-400">
+                {{ answered.aiReason }}
+              </p>
               <p class="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink-700">
                 {{ answered.explanation }}
               </p>
@@ -465,6 +621,7 @@ const optionClass = (opt: string) => {
             <div class="card text-center">
               <span
                 class="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600"
+                :class="summary.delta > 0 ? 'levelup' : ''"
               >
                 <Icon name="emoji_events" size="32" />
               </span>
@@ -485,13 +642,13 @@ const optionClass = (opt: string) => {
                 <Icon name="arrow_forward" size="18" class="text-ink-400" />
                 <span
                   class="text-2xl font-bold"
-                  :class="
+                  :class="[
                     summary.delta > 0
-                      ? 'text-emerald-600'
+                      ? 'text-emerald-600 levelup'
                       : summary.delta < 0
                         ? 'text-red-500'
-                        : 'text-ink-700'
-                  "
+                        : 'text-ink-700',
+                  ]"
                   >{{ summary.newLevel }}</span
                 >
                 <span v-if="summary.delta > 0" class="text-sm font-medium text-emerald-600"
@@ -500,7 +657,11 @@ const optionClass = (opt: string) => {
                 <span v-else-if="summary.delta < 0" class="text-sm text-red-500">ダウン</span>
               </div>
             </div>
-            <button class="btn-primary w-full justify-center gap-2 py-4" @click="startSession">
+            <button
+              class="btn-primary w-full justify-center gap-2 py-4"
+              :disabled="starting"
+              @click="startSession()"
+            >
               <Icon name="replay" size="20" />もう10問
             </button>
             <button class="btn-ghost w-full justify-center" @click="backHome">ホームへ</button>
@@ -518,9 +679,9 @@ const optionClass = (opt: string) => {
         <div class="mx-auto max-w-md">
           <template v-if="obStep === 1">
             <p class="text-xs font-medium uppercase tracking-wide text-brand-600">STEP 1</p>
-            <h2 class="mt-1 text-xl font-bold text-ink-800">受検する種別を選んでください</h2>
+            <h2 class="mt-1 text-xl font-bold text-ink-800">あなたの現場を選んでください</h2>
             <p class="mt-1 text-sm text-ink-500">
-              あなたの種別に合った問題だけが出ます。あとで変えられます。
+              現場に合わせて出題のバランスを調整します。あとで変えられます。
             </p>
             <div class="mt-5 space-y-3">
               <button
@@ -547,7 +708,7 @@ const optionClass = (opt: string) => {
               class="mb-3 inline-flex items-center gap-1 text-sm text-ink-500"
               @click="obStep = 1"
             >
-              <Icon name="arrow_back" size="18" />種別を選び直す
+              <Icon name="arrow_back" size="18" />現場を選び直す
             </button>
             <p class="text-xs font-medium uppercase tracking-wide text-brand-600">STEP 2</p>
             <h2 class="mt-1 text-xl font-bold text-ink-800">受験パターンを選んでください</h2>
@@ -569,3 +730,23 @@ const optionClass = (opt: string) => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@keyframes levelup-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.35);
+  }
+  60% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.levelup {
+  animation: levelup-pop 0.7s ease-out 1;
+}
+</style>

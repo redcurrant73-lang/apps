@@ -40,104 +40,163 @@ export interface GenreGroup {
   genres: string[]
 }
 
-// ===== ドメイン: 施工管理2級(2級建築施工管理技士・第一次検定)=====
+// ===== ドメイン: 看護師国家試験 =====
 export const DOMAIN_CONFIG: DomainConfig = {
   appId: 'exam-prep',
-  appTitle: '施工管理2級ドリル',
-  appSubtitle: '2級建築施工管理技士 一問一答',
-  examLabel: '2級建築施工管理技士(第一次検定)',
-  // 実際の試験日に合わせて編集する(目安として後期日程を仮置き)
-  examDate: '2026-11-15',
-  aiSubject: '2級建築施工管理技士(第一次検定)',
+  appTitle: '看護師国試ドリル',
+  appSubtitle: '看護師国家試験 一問一答',
+  examLabel: '看護師国家試験',
+  // 実際の試験日に合わせて編集する(国試は例年2月中旬)
+  examDate: '2027-02-14',
+  aiSubject: '看護師国家試験',
   segments: [
     {
-      id: '建築',
-      label: '建築',
+      id: '病棟',
+      label: '病棟',
       isRecommendedDefault: true,
-      hint: '建築一式。躯体・仕上げ両方が出ます(迷ったらこれ)',
+      hint: '入院患者さんの全身管理。急性期から在宅連携まで幅広く(迷ったらこれ)',
     },
-    { id: '躯体', label: '躯体', hint: '鉄筋・型枠・コンクリート・鉄骨など構造体が中心' },
-    { id: '仕上げ', label: '仕上げ', hint: '防水・左官・タイル・建具・内装・塗装など仕上げが中心' },
+    { id: '外来', label: '外来', hint: '外来・在宅・継続看護が中心。重症集中ケアは控えめ' },
+    { id: 'ICU', label: 'ICU', hint: '重症・急性期。クリティカルケアを厚めに' },
   ],
   // 1種類だけなので、オンボーディングの受験パターン選択(STEP2)は自動スキップされる
-  examTargetOptions: [{ id: 'first', label: '第一次検定', examLevel: '2級' }],
+  examTargetOptions: [{ id: 'kokushi', label: '国家試験', examLevel: '国試' }],
 }
 
 export const GENRE_GROUPS: GenreGroup[] = [
   {
-    id: 'kenchikugaku',
-    title: '建築学',
-    examLevel: '2級',
-    segmentRelevance: [], // 全種別共通
-    genres: [
-      '計画(採光・換気・寸法)',
-      '環境工学(熱・音・湿気)',
-      '一般構造',
-      '構造力学(反力・応力)',
-      '建築材料(木・鋼・コンクリート)',
-    ],
-  },
-  {
-    id: 'kyotsu',
-    title: '共通(設備・契約)',
-    examLevel: '2級',
-    segmentRelevance: [],
-    genres: ['建築設備(給排水・電気・空調)', '測量', '契約・積算', '外構・植栽'],
-  },
-  {
-    id: 'kutai',
-    title: '躯体工事',
-    examLevel: '2級',
-    segmentRelevance: ['躯体', '建築'],
-    genres: [
-      '地盤調査・土工事',
-      '地業・基礎',
-      '鉄筋工事',
-      '型枠工事',
-      'コンクリート工事',
-      '鉄骨工事',
-      '補強コンクリートブロック',
-      '木工事(軸組)',
-      '建設機械',
-    ],
-  },
-  {
-    id: 'shiage',
-    title: '仕上工事',
-    examLevel: '2級',
-    segmentRelevance: ['仕上げ', '建築'],
-    genres: [
-      '防水工事',
-      '屋根・とい',
-      '左官工事',
-      'タイル工事',
-      '石工事',
-      '金属工事',
-      '建具・ガラス',
-      '塗装工事',
-      '内装工事(床・壁・天井)',
-      '断熱・改修',
-    ],
-  },
-  {
-    id: 'kanriho',
-    title: '施工管理法',
-    examLevel: '2級',
-    segmentRelevance: [],
-    genres: ['施工計画', '工程管理(工程表)', '品質管理', '安全管理', '材料の保管・取扱い'],
-  },
-  {
-    id: 'hoki',
-    title: '法規',
-    examLevel: '2級',
+    id: 'hisshu',
+    title: '必修問題',
+    examLevel: '国試',
     segmentRelevance: [],
     genres: [
-      '建築基準法',
-      '建設業法',
-      '労働安全衛生法',
-      '労働基準法',
-      'その他関連法規(廃棄物・道路・消防)',
+      '看護の対象と保健統計',
+      '看護倫理と関係法規',
+      '主要な症状と看護',
+      '感染防止・医療安全',
+      '基本的な臨床薬理',
+      'フィジカルアセスメント',
     ],
+  },
+  {
+    id: 'jintai',
+    title: '人体の構造と機能',
+    examLevel: '国試',
+    segmentRelevance: [],
+    genres: [
+      '循環器',
+      '呼吸器',
+      '消化器',
+      '腎・泌尿器',
+      '内分泌・代謝',
+      '脳・神経',
+      '血液・免疫',
+      '運動器・感覚器',
+    ],
+  },
+  {
+    id: 'shippei',
+    title: '疾病の成り立ちと回復',
+    examLevel: '国試',
+    segmentRelevance: [],
+    genres: [
+      '病態生理の基本',
+      '生活習慣病',
+      '感染症',
+      '悪性腫瘍',
+      '主要薬剤と副作用',
+      '検査データの解釈',
+    ],
+  },
+  {
+    id: 'shakai',
+    title: '健康支援と社会保障',
+    examLevel: '国試',
+    segmentRelevance: [],
+    genres: ['社会保障制度', '医療保険・介護保険', '保健統計・疫学', '公衆衛生・予防', '関係法規'],
+  },
+  {
+    id: 'kiso',
+    title: '基礎看護学',
+    examLevel: '国試',
+    segmentRelevance: [],
+    genres: [
+      '看護過程',
+      '日常生活の援助',
+      '与薬・輸液管理',
+      'バイタルサインと観察',
+      '無菌操作・感染管理',
+      '看護記録とコミュニケーション',
+    ],
+  },
+  {
+    id: 'seijin',
+    title: '成人看護学',
+    examLevel: '国試',
+    segmentRelevance: [],
+    genres: [
+      '周術期看護',
+      '慢性期看護',
+      'がん看護・緩和ケア',
+      'リハビリテーション看護',
+      '栄養・代謝の管理',
+    ],
+  },
+  {
+    id: 'ronen',
+    title: '老年看護学',
+    examLevel: '国試',
+    segmentRelevance: [],
+    genres: ['加齢に伴う変化', '認知症の看護', '高齢者の生活支援', '転倒・誤嚥の予防'],
+  },
+  {
+    id: 'shoni',
+    title: '小児看護学',
+    examLevel: '国試',
+    segmentRelevance: [],
+    genres: ['成長・発達', '小児の疾患と看護', '予防接種・健診', '家族への支援'],
+  },
+  {
+    id: 'bosei',
+    title: '母性看護学',
+    examLevel: '国試',
+    segmentRelevance: [],
+    genres: ['妊娠・分娩・産褥', '新生児の看護', '女性のライフサイクル', '母子保健'],
+  },
+  {
+    id: 'seishin',
+    title: '精神看護学',
+    examLevel: '国試',
+    segmentRelevance: [],
+    genres: ['精神疾患の理解', '精神科の治療と看護', '地域精神保健', '危機介入'],
+  },
+  {
+    id: 'critical',
+    title: '急性期・クリティカルケア',
+    examLevel: '国試',
+    segmentRelevance: ['病棟', 'ICU'],
+    genres: [
+      '急変対応・一次救命処置',
+      '人工呼吸器の管理',
+      '循環動態モニタリング',
+      'ショックと輸液療法',
+      '術後合併症の早期発見',
+      '重症患者の全身管理',
+    ],
+  },
+  {
+    id: 'zaitaku',
+    title: '在宅・地域看護',
+    examLevel: '国試',
+    segmentRelevance: ['外来', '病棟'],
+    genres: ['在宅療養の支援', '訪問看護', '社会資源の活用', '外来・継続看護', '退院支援と地域連携'],
+  },
+  {
+    id: 'togo',
+    title: '看護の統合と実践',
+    examLevel: '国試',
+    segmentRelevance: [],
+    genres: ['医療安全管理', '災害看護', 'チーム医療・多職種連携', '看護管理の基本'],
   },
 ]
 
@@ -167,6 +226,12 @@ export function isCommonGroup(groupId: string): boolean {
 
 export function groupTitleById(groupId: string): string {
   return GENRE_GROUPS.find((g) => g.id === groupId)?.title ?? groupId
+}
+
+/** レーダー/バーの達成率の分母(その group を「習得した」とみなす一意正解数の目安) */
+export function groupGoal(groupId: string): number {
+  const g = GENRE_GROUPS.find((x) => x.id === groupId)
+  return Math.max(4, (g?.genres.length ?? 4) * 2)
 }
 
 /**
@@ -203,6 +268,11 @@ function toJstDay(d: Date): string {
   return new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 }
 
+/** JST の「今日から数えて n 日前」の日付キー(0=今日) */
+export function jstDayKey(daysAgo = 0): string {
+  return toJstDay(new Date(Date.now() - daysAgo * 24 * 3600 * 1000))
+}
+
 /** 回答日(Date配列)から、今日(または昨日)から遡った連続学習日数を求める */
 export function computeStreak(dates: Date[]): number {
   const days = new Set(dates.map(toJstDay))
@@ -218,4 +288,15 @@ export function computeStreak(dates: Date[]): number {
     } else break
   }
   return streak
+}
+
+/** 直近7日(古い→新しい)それぞれ学習したか。streak のドット表示用 */
+export function last7Days(dates: Date[]): { day: string; studied: boolean }[] {
+  const days = new Set(dates.map(toJstDay))
+  const out: { day: string; studied: boolean }[] = []
+  for (let i = 6; i >= 0; i--) {
+    const key = toJstDay(new Date(Date.now() - i * 24 * 3600 * 1000))
+    out.push({ day: key.slice(5), studied: days.has(key) })
+  }
+  return out
 }

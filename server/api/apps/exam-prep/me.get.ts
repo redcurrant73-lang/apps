@@ -1,10 +1,14 @@
-// getMe: プロフィール + 進捗集計 + streak + 試験カウントダウン + 進行中セッションをまとめて返す。
+// getMe: プロフィール + 進捗集計(分野別の達成率)+ streak + 試験カウントダウン
+// + 進行中セッションをまとめて返す。
 import {
   DOMAIN_CONFIG,
   daysUntil,
   defaultExamTarget,
+  examLevelForTarget,
+  relevantGroups,
+  groupGoal,
   computeStreak,
-  groupTitleById,
+  last7Days,
 } from '~/server/utils/exam-prep/config'
 import {
   ensureProfile,
@@ -30,22 +34,36 @@ export default defineEventHandler(async (event) => {
   const needExamTarget = !examTarget && DOMAIN_CONFIG.examTargetOptions.length > 1
   const onboardingNeeded = needSegment || needExamTarget
 
-  let byGroup: { groupId: string; title: string; correct: number }[] = []
+  let byGroup: {
+    groupId: string
+    title: string
+    correct: number
+    goal: number
+    pct: number
+  }[] = []
   let streak = 0
-  if (!onboardingNeeded) {
+  let last7: { day: string; studied: boolean }[] = []
+
+  if (!onboardingNeeded && profile.segment) {
+    const examLevel =
+      examLevelForTarget(examTarget) || DOMAIN_CONFIG.examTargetOptions[0]?.examLevel || ''
     const correct = await readCorrectProgress(decoded.uid)
     const perGroup = new Map<string, Set<string>>()
     for (const p of correct) {
       if (!perGroup.has(p.groupId)) perGroup.set(p.groupId, new Set())
       perGroup.get(p.groupId)!.add(p.questionId)
     }
-    byGroup = [...perGroup.entries()].map(([groupId, set]) => ({
-      groupId,
-      title: groupTitleById(groupId),
-      correct: set.size,
-    }))
+    // レーダー/バーの軸を安定させるため、関係する全 group を返す(0% も含む)
+    byGroup = relevantGroups(profile.segment, examLevel).map((g) => {
+      const cnt = perGroup.get(g.id)?.size ?? 0
+      const goal = groupGoal(g.id)
+      return { groupId: g.id, title: g.title, correct: cnt, goal, pct: Math.min(100, Math.round((cnt / goal) * 100)) }
+    })
+
     const recent = await readRecentProgress(decoded.uid, Date.now() - 60 * 24 * 3600 * 1000)
-    streak = computeStreak(recent.map((r) => r.answeredAt).filter((d): d is Date => !!d))
+    const dates = recent.map((r) => r.answeredAt).filter((d): d is Date => !!d)
+    streak = computeStreak(dates)
+    last7 = last7Days(dates)
   }
 
   return {
@@ -70,7 +88,7 @@ export default defineEventHandler(async (event) => {
     onboardingNeeded,
     needSegment,
     needExamTarget,
-    stats: { byGroup, streak },
+    stats: { byGroup, streak, last7 },
     activeSession: profile.currentSession ? presentSession(profile.currentSession) : null,
   }
 })

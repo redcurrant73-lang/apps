@@ -59,9 +59,11 @@ export interface PoolQuestion {
   genre: string
   groupId: string
   examLevel: string
-  /** '共通' または 種別(建築/躯体/仕上げ) */
+  /** '共通' または 種別(病棟/外来/ICU) */
   segment: string
   source: 'seed' | 'generated'
+  /** seed 問題の重複投入を防ぐ一意キー(generated には無い) */
+  seedKey?: string
 }
 
 // ---- パス ----
@@ -285,6 +287,40 @@ export async function listPeers(limitN = 20) {
   })
   rows.sort((a, b) => b.totalCorrect - a.totalCorrect)
   return rows.slice(0, limitN)
+}
+
+// ---- seed(確認済み問題)の投入・全消去 ----
+export async function existingSeedKeys(): Promise<Set<string>> {
+  const snap = await questionsCol().where('source', '==', 'seed').limit(500).get()
+  const out = new Set<string>()
+  snap.docs.forEach((d) => {
+    const k = (d.data() as any).seedKey
+    if (k) out.add(k)
+  })
+  return out
+}
+
+/** seedKey が未投入のものだけ追加。追加件数を返す(再実行しても重複しない) */
+export async function addSeedQuestions(
+  items: (Omit<PoolQuestion, 'id'> & { seedKey: string })[],
+): Promise<number> {
+  const existing = await existingSeedKeys()
+  const toAdd = items.filter((it) => !existing.has(it.seedKey))
+  for (const it of toAdd) {
+    await questionsCol().add({ ...it, createdAt: FieldValue.serverTimestamp() })
+  }
+  return toAdd.length
+}
+
+/** 問題プールを消す。source 指定なしで全消去(1回最大500件) */
+export async function wipeQuestions(source?: 'generated' | 'seed'): Promise<number> {
+  const ref = source ? questionsCol().where('source', '==', source) : questionsCol()
+  const snap = await ref.limit(500).get()
+  if (snap.empty) return 0
+  const batch = db.batch()
+  snap.docs.forEach((d) => batch.delete(d.ref))
+  await batch.commit()
+  return snap.size
 }
 
 // ---- セッションをクライアント提示用に整える ----

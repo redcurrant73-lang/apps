@@ -1,5 +1,7 @@
 // submitAnswer: questionId + userAnswer を判定し、progress を書き、カウンタを増やし、
 // { isCorrect, answer, explanation, ... } を返す。answer/explanation はここで初めて開示する。
+// choice は完全一致、free(記述)は AI 採点(表記ゆれ・言い換えを正解扱い)。
+import { DOMAIN_CONFIG } from '~/server/utils/exam-prep/config'
 import {
   getProfile,
   getQuestion,
@@ -7,6 +9,7 @@ import {
   recordAnswer,
   presentSession,
 } from '~/server/utils/exam-prep/store'
+import { gradeAnswerByAI } from '~/server/utils/exam-prep/ai'
 
 function normalize(s: string): string {
   return s.trim().replace(/\s+/g, '').toLowerCase()
@@ -33,8 +36,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: '問題が見つかりません' })
   }
 
-  // choice は完全一致。free は Phase3 で AI 採点に差し替える(暫定は正規化一致)。
-  const isCorrect = normalize(userAnswer) === normalize(q.answer)
+  let isCorrect = false
+  let aiReason: string | undefined
+  if (q.type === 'free') {
+    const g = await gradeAnswerByAI({
+      aiSubject: DOMAIN_CONFIG.aiSubject,
+      question: q.question,
+      answer: q.answer,
+      synonyms: q.keywords,
+      userAnswer,
+    })
+    isCorrect = g.correct
+    aiReason = g.reason
+  } else {
+    isCorrect = normalize(userAnswer) === normalize(q.answer)
+  }
 
   const updated = await applyAnswerTxn(decoded.uid, { questionId, isCorrect })
   const attempts = updated?.attempts[questionId] ?? 1
@@ -52,6 +68,7 @@ export default defineEventHandler(async (event) => {
     isCorrect,
     answer: q.answer,
     explanation: q.explanation,
+    aiReason,
     attempts,
     session: present,
     done: present?.done ?? false,
