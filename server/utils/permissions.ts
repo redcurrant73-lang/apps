@@ -125,8 +125,8 @@ export async function ensureUserDoc(decoded: {
 
   if (!snap.exists) {
     let role: Role = 'user'
-    if (email && email === ownerEmail) role = 'owner'
-    else if (email && email === superuserEmail) role = 'superuser'
+    // 一旦 owner も superuser 扱い(俺=owner を superuser に)。元に戻すときは owner を 'owner' へ。
+    if (email && (email === ownerEmail || email === superuserEmail)) role = 'superuser'
     await ref.set({
       email: decoded.email || '',
       displayName: decoded.name || '',
@@ -140,9 +140,10 @@ export async function ensureUserDoc(decoded: {
 
   const data = snap.data() || {}
   const updates: Record<string, any> = { lastLoginAt: FieldValue.serverTimestamp() }
-  // 初期化救済: 設定メールに一致するのにロールが低い場合のみ昇格
-  if (email && email === ownerEmail && data.role !== 'owner') updates.role = 'owner'
-  else if (email && email === superuserEmail && data.role === 'user') updates.role = 'superuser'
+  // 一旦 owner も superuser に昇格(元に戻すときはこの条件を見直す)
+  if (email && (email === ownerEmail || email === superuserEmail) && data.role !== 'superuser') {
+    updates.role = 'superuser'
+  }
   await ref.set(updates, { merge: true })
   return (updates.role as Role) ?? (data.role as Role) ?? 'user'
 }

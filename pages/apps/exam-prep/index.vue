@@ -25,6 +25,7 @@ interface Me {
   profile: any
   stats: { byCategory: any[]; streak: number; last7: { day: string; studied: boolean }[] }
   activeSession: any
+  switcher?: { quizzes: { id: string; title: string }[]; currentQuizId: string } | null
 }
 const me = ref<Me | null>(null)
 
@@ -40,6 +41,22 @@ const loadMe = async () => {
   }
 }
 onMounted(loadMe)
+
+// superuser:課題(クイズ)切り替え(各業種のUI確認用)
+const switching = ref(false)
+const switchQuiz = async (quizId: string) => {
+  if (switching.value || quizId === me.value?.switcher?.currentQuizId) return
+  switching.value = true
+  errorMsg.value = ''
+  try {
+    await $api('/api/apps/exam-prep/switch', { method: 'POST', body: { quizId } })
+    await loadMe()
+  } catch (e: any) {
+    errorMsg.value = e?.data?.message || '切り替えに失敗しました'
+  } finally {
+    switching.value = false
+  }
+}
 
 const masteryPct = computed(() => {
   const p = me.value?.profile
@@ -280,6 +297,20 @@ const optionClass = (opt: string) => {
         <template v-else-if="me">
           <!-- ===== HOME ===== -->
           <template v-if="view === 'home'">
+            <!-- superuser:課題の切り替え(各業種のUI確認) -->
+            <div v-if="me.switcher" class="card flex items-center gap-2">
+              <Icon name="swap_horiz" size="20" class="shrink-0 text-ink-500" />
+              <span class="shrink-0 text-sm text-ink-600">課題を切替(管理)</span>
+              <select
+                class="field ml-auto w-auto"
+                :value="me.switcher.currentQuizId"
+                :disabled="switching"
+                @change="switchQuiz(($event.target as HTMLSelectElement).value)"
+              >
+                <option v-for="q in me.switcher.quizzes" :key="q.id" :value="q.id">{{ q.title }}</option>
+              </select>
+            </div>
+
             <!-- カウントダウン or タイトル -->
             <div class="card bg-brand text-white">
               <template v-if="me.quiz.daysLeft !== null">

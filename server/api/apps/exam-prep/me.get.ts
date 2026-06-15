@@ -1,5 +1,12 @@
 // getMe: 割り当てられたクイズ + カテゴリ別達成率 + streak + 7日 + カウントダウン + 進行中セッション。
-import { getQuiz, daysUntil, categoryGoal, computeStreak, last7Days } from '~/server/utils/exam-prep/config'
+import {
+  getQuiz,
+  daysUntil,
+  categoryGoal,
+  computeStreak,
+  last7Days,
+  listQuizzes,
+} from '~/server/utils/exam-prep/config'
 import {
   ensureProfile,
   readCorrectProgress,
@@ -11,6 +18,7 @@ export default defineEventHandler(async (event) => {
   const decoded = await requireAppAccess(event, 'exam-prep')
   const profile = await ensureProfile(decoded)
   const quiz = getQuiz(profile.quizId)
+  const isSuper = (await getUserRole(decoded.uid)) === 'superuser'
 
   // カテゴリ別の一意正解数
   const correct = await readCorrectProgress(decoded.uid)
@@ -47,5 +55,7 @@ export default defineEventHandler(async (event) => {
     },
     stats: { byCategory, streak: computeStreak(dates), last7: last7Days(dates) },
     activeSession: profile.currentSession ? presentSession(profile.currentSession) : null,
+    // superuser は課題(クイズ)を切り替えて各UIを確認できる
+    switcher: isSuper ? { quizzes: listQuizzes(), currentQuizId: quiz.id } : null,
   }
 })
