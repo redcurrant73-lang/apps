@@ -71,6 +71,9 @@ export default defineNuxtConfig({
       firebaseConfig: '',
       // Web Push 購読に使う公開鍵
       vapidPublic: '',
+      // デプロイ済みコミットの短い識別子 (画面隅のバージョン表示用)。
+      // 本番では deploy で NUXT_PUBLIC_GIT_SHA を流す。未設定なら 'dev' 表示。
+      gitSha: '',
     },
   },
 
