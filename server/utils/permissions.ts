@@ -54,13 +54,19 @@ export async function requireSuperuser(event: H3Event) {
   return decoded
 }
 
+// owner が招待なしでも見られるアプリ(招待制のままだが、世帯内の本人は最初から見える)。
+// プライバシー設計上 owner に「全アプリ自動表示」はしない。ここに挙げたものだけが例外。
+const OWNER_VISIBLE_APPS = ['exam-prep']
+
 /**
  * 指定アプリへのアクセス権があるか。
- * superuser のみ自動で全アプリアクセス可。owner は appAccess の付与が必要。
+ * superuser は全アプリ可。owner は原則 appAccess が必要だが、OWNER_VISIBLE_APPS は例外的に可。
+ * それ以外のユーザーは appAccess(招待)が必要。
  */
 export async function hasAppAccess(uid: string, appId: string, role?: Role | null) {
   const r = role ?? (await getUserRole(uid))
   if (r === 'superuser') return true
+  if (r === 'owner' && OWNER_VISIBLE_APPS.includes(appId)) return true
   const snap = await db.collection('appAccess').doc(`${uid}_${appId}`).get()
   return snap.exists
 }
