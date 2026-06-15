@@ -1,21 +1,13 @@
 // startSession: 10問を選ぶ。
-//   1. ユーザーの種別/受験パターンに合うジャンルだけに厳密に絞る(範囲外は絶対に混ぜない)
-//   2. 弱点(達成率の低い分野)を優先的に多めにサンプリング。groupId 指定で集中セッション
-//   3. 既存プールを優先。足りない分だけ AI バッチ生成(1回の呼び出し、一部は記述式)
+//   1. 割り当てクイズのカテゴリ×トピックから出題(範囲外は混ぜない)
+//   2. 弱点カテゴリ(達成率が低い)を重み付けして多めに。categoryId 指定で集中セッション
+//   3. 既存プール(現行 promptVersion のみ)を優先。足りない分だけ AI バッチ生成
 //   4. 進行中セッションがあれば再開
-// answer / explanation はレスポンスに含めない(カンニング防止)。
-import {
-  DOMAIN_CONFIG,
-  examLevelForTarget,
-  genreTargets,
-  relevantGroups,
-  groupGoal,
-  isCommonGroup,
-  type GenreTarget,
-} from '~/server/utils/exam-prep/config'
+// answer/explanation はレスポンスに含めない(カンニング防止)。
+import { getQuiz, quizTargets, categoryGoal, type QuizTarget } from '~/server/utils/exam-prep/config'
 import {
   ensureProfile,
-  readPoolByLevel,
+  readPool,
   readCorrectProgress,
   addQuestions,
   saveSession,
@@ -63,12 +55,12 @@ function weightedSampleDistinct<T>(items: T[], weight: (t: T) => number, n: numb
   return out
 }
 
-function toSessionQuestion(q: PoolQuestion, t: GenreTarget): SessionQuestion {
+function toSessionQuestion(q: PoolQuestion, t: QuizTarget): SessionQuestion {
   return {
     questionId: q.id,
-    groupId: t.groupId,
-    groupTitle: t.groupTitle,
-    genre: t.genre,
+    categoryId: t.categoryId,
+    categoryTitle: t.categoryTitle,
+    topic: t.topic,
     type: q.type,
     question: q.question,
     options: q.options,
@@ -78,17 +70,9 @@ function toSessionQuestion(q: PoolQuestion, t: GenreTarget): SessionQuestion {
 export default defineEventHandler(async (event) => {
   const decoded = await requireAppAccess(event, 'exam-prep')
   const profile = await ensureProfile(decoded)
+  const quiz = getQuiz(profile.quizId)
   const body = await readBody(event).catch(() => ({}))
-  const focusGroupId: string | null = body?.groupId ? String(body.groupId) : null
-
-  if (!profile.segment) {
-    throw createError({ statusCode: 400, message: 'はじめに受検種別を選んでください' })
-  }
-  const examLevel =
-    examLevelForTarget(profile.examTarget) || DOMAIN_CONFIG.examTargetOptions[0]?.examLevel
-  if (!examLevel) {
-    throw createError({ statusCode: 400, message: '受験パターンが未設定です' })
-  }
+  const focusCategoryId: string | null = body?.categoryId ? String(body.categoryId) : null
 
   // 進行中セッションがあれば再開
   if (profile.currentSession && profile.currentSession.queue.length > 0) {
@@ -99,53 +83,51 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const allTargets = genreTargets(profile.segment, examLevel)
+  const allTargets = quizTargets(quiz)
   if (allTargets.length === 0) {
     throw createError({ statusCode: 500, message: '出題範囲が見つかりません' })
   }
 
-  // 既に正解済みの問題は再利用しない + 分野別の達成度(弱点優先の重みに使う)
+  // 既正解の除外 + カテゴリ別達成度(弱点優先の重み)
   const correctList = await readCorrectProgress(decoded.uid)
   const correctIds = new Set(correctList.map((p) => p.questionId))
-  const perGroupCorrect = new Map<string, Set<string>>()
+  const perCat = new Map<string, Set<string>>()
   for (const p of correctList) {
-    if (!perGroupCorrect.has(p.groupId)) perGroupCorrect.set(p.groupId, new Set())
-    perGroupCorrect.get(p.groupId)!.add(p.questionId)
+    if (!perCat.has(p.categoryId)) perCat.set(p.categoryId, new Set())
+    perCat.get(p.categoryId)!.add(p.questionId)
   }
-  const groupWeight = (gid: string) => {
-    const mastery = Math.min(1, (perGroupCorrect.get(gid)?.size ?? 0) / groupGoal(gid))
-    return 1 + (1 - mastery) * 2 // 未習得ほど重い(1〜3)
+  const catWeight = (catId: string) => {
+    const mastery = Math.min(1, (perCat.get(catId)?.size ?? 0) / categoryGoal(quiz, catId))
+    return 1 + (1 - mastery) * 2
   }
 
-  // 出題ジャンルを10個サンプリング
-  let picked: GenreTarget[]
-  if (focusGroupId) {
-    const okGroup = relevantGroups(profile.segment, examLevel).some((g) => g.id === focusGroupId)
-    if (!okGroup) throw createError({ statusCode: 400, message: 'その分野は対象外です' })
-    const focusTargets = allTargets.filter((t) => t.groupId === focusGroupId)
-    if (focusTargets.length === 0) throw createError({ statusCode: 400, message: 'その分野の出題がありません' })
-    picked = sampleUniform(focusTargets, SESSION_SIZE)
+  let picked: QuizTarget[]
+  if (focusCategoryId) {
+    const focus = allTargets.filter((t) => t.categoryId === focusCategoryId)
+    if (focus.length === 0) throw createError({ statusCode: 400, message: 'そのカテゴリは対象外です' })
+    picked = sampleUniform(focus, SESSION_SIZE)
   } else {
-    picked = weightedSampleDistinct(allTargets, (t) => groupWeight(t.groupId), SESSION_SIZE)
+    picked = weightedSampleDistinct(allTargets, (t) => catWeight(t.categoryId), SESSION_SIZE)
   }
 
-  // プール(同じ examLevel・種別一致 or 共通・未正解)を genre 別に整理
-  const pool = (await readPoolByLevel(examLevel)).filter(
-    (q) => (q.segment === profile.segment || q.segment === '共通') && !correctIds.has(q.id),
-  )
-  const byGenre = new Map<string, PoolQuestion[]>()
+  // プール(現行 promptVersion・未正解)を topic 別に整理
+  const pool = (await readPool(quiz.id, quiz.prompt.version)).filter((q) => !correctIds.has(q.id))
+  const byTopic = new Map<string, PoolQuestion[]>()
   for (const q of pool) {
-    if (!byGenre.has(q.genre)) byGenre.set(q.genre, [])
-    byGenre.get(q.genre)!.push(q)
+    const k = `${q.categoryId}::${q.topic}`
+    if (!byTopic.has(k)) byTopic.set(k, [])
+    byTopic.get(k)!.push(q)
   }
-  for (const list of byGenre.values()) shuffleInPlace(list)
+  for (const list of byTopic.values()) shuffleInPlace(list)
 
   const chosen: (SessionQuestion | undefined)[] = new Array(picked.length)
   const usedIds = new Set<string>()
-  const missing: { idx: number; target: GenreTarget }[] = []
+  const missing: { idx: number; target: QuizTarget }[] = []
 
   picked.forEach((target, idx) => {
-    const found = (byGenre.get(target.genre) || []).find((q) => !usedIds.has(q.id))
+    const found = (byTopic.get(`${target.categoryId}::${target.topic}`) || []).find(
+      (q) => !usedIds.has(q.id),
+    )
     if (found) {
       usedIds.add(found.id)
       chosen[idx] = toSessionQuestion(found, target)
@@ -154,23 +136,21 @@ export default defineEventHandler(async (event) => {
     }
   })
 
-  // 足りない分を 1 回の AI 呼び出しでまとめて生成(末尾は記述式)→ プール保存 → セッション採用
   if (missing.length > 0) {
     const freeCount = Math.min(2, Math.floor(missing.length / 5))
     const generated = await generateQuestionsBatch({
-      aiSubject: DOMAIN_CONFIG.aiSubject,
-      segmentLabel: profile.segment,
+      quiz,
       targets: missing.map((m) => m.target),
       freeCount,
     })
     const toAdd: Omit<PoolQuestion, 'id'>[] = []
     const slots: number[] = []
-    const slotTargets: GenreTarget[] = []
+    const slotTargets: QuizTarget[] = []
     for (let i = 0; i < missing.length && i < generated.length; i++) {
       const m = missing[i]
       const g = generated[i]
       toAdd.push({
-        category: g.category || m.target.groupTitle,
+        category: g.category || m.target.categoryTitle,
         difficulty: g.difficulty,
         type: g.type,
         question: g.question,
@@ -178,10 +158,10 @@ export default defineEventHandler(async (event) => {
         answer: g.answer,
         keywords: g.keywords,
         explanation: g.explanation,
-        genre: m.target.genre,
-        groupId: m.target.groupId,
-        examLevel,
-        segment: isCommonGroup(m.target.groupId) ? '共通' : profile.segment,
+        quizId: quiz.id,
+        categoryId: m.target.categoryId,
+        topic: m.target.topic,
+        promptVersion: quiz.prompt.version,
         source: 'generated',
       })
       slots.push(m.idx)

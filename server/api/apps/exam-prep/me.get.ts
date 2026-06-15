@@ -1,18 +1,7 @@
-// getMe: プロフィール + 進捗集計(分野別の達成率)+ streak + 試験カウントダウン
-// + 進行中セッションをまとめて返す。
-import {
-  DOMAIN_CONFIG,
-  daysUntil,
-  defaultExamTarget,
-  examLevelForTarget,
-  relevantGroups,
-  groupGoal,
-  computeStreak,
-  last7Days,
-} from '~/server/utils/exam-prep/config'
+// getMe: 割り当てられたクイズ + カテゴリ別達成率 + streak + 7日 + カウントダウン + 進行中セッション。
+import { getQuiz, daysUntil, categoryGoal, computeStreak, last7Days } from '~/server/utils/exam-prep/config'
 import {
   ensureProfile,
-  updateProfileFields,
   readCorrectProgress,
   readRecentProgress,
   presentSession,
@@ -21,74 +10,42 @@ import {
 export default defineEventHandler(async (event) => {
   const decoded = await requireAppAccess(event, 'exam-prep')
   const profile = await ensureProfile(decoded)
+  const quiz = getQuiz(profile.quizId)
 
-  // 受験パターンが1種類なら自動セット(オンボーディングSTEP2を省く)
-  let examTarget = profile.examTarget
-  const def = defaultExamTarget()
-  if (!examTarget && def) {
-    examTarget = def.id
-    await updateProfileFields(decoded.uid, { examTarget })
+  // カテゴリ別の一意正解数
+  const correct = await readCorrectProgress(decoded.uid)
+  const perCat = new Map<string, Set<string>>()
+  for (const p of correct) {
+    if (!perCat.has(p.categoryId)) perCat.set(p.categoryId, new Set())
+    perCat.get(p.categoryId)!.add(p.questionId)
   }
+  const byCategory = quiz.categories.map((c) => {
+    const cnt = perCat.get(c.id)?.size ?? 0
+    const goal = categoryGoal(quiz, c.id)
+    return { categoryId: c.id, title: c.title, correct: cnt, goal, pct: Math.min(100, Math.round((cnt / goal) * 100)) }
+  })
 
-  const needSegment = !profile.segment
-  const needExamTarget = !examTarget && DOMAIN_CONFIG.examTargetOptions.length > 1
-  const onboardingNeeded = needSegment || needExamTarget
-
-  let byGroup: {
-    groupId: string
-    title: string
-    correct: number
-    goal: number
-    pct: number
-  }[] = []
-  let streak = 0
-  let last7: { day: string; studied: boolean }[] = []
-
-  if (!onboardingNeeded && profile.segment) {
-    const examLevel =
-      examLevelForTarget(examTarget) || DOMAIN_CONFIG.examTargetOptions[0]?.examLevel || ''
-    const correct = await readCorrectProgress(decoded.uid)
-    const perGroup = new Map<string, Set<string>>()
-    for (const p of correct) {
-      if (!perGroup.has(p.groupId)) perGroup.set(p.groupId, new Set())
-      perGroup.get(p.groupId)!.add(p.questionId)
-    }
-    // レーダー/バーの軸を安定させるため、関係する全 group を返す(0% も含む)
-    byGroup = relevantGroups(profile.segment, examLevel).map((g) => {
-      const cnt = perGroup.get(g.id)?.size ?? 0
-      const goal = groupGoal(g.id)
-      return { groupId: g.id, title: g.title, correct: cnt, goal, pct: Math.min(100, Math.round((cnt / goal) * 100)) }
-    })
-
-    const recent = await readRecentProgress(decoded.uid, Date.now() - 60 * 24 * 3600 * 1000)
-    const dates = recent.map((r) => r.answeredAt).filter((d): d is Date => !!d)
-    streak = computeStreak(dates)
-    last7 = last7Days(dates)
-  }
+  const recent = await readRecentProgress(decoded.uid, Date.now() - 60 * 24 * 3600 * 1000)
+  const dates = recent.map((r) => r.answeredAt).filter((d): d is Date => !!d)
 
   return {
-    domain: {
-      appTitle: DOMAIN_CONFIG.appTitle,
-      appSubtitle: DOMAIN_CONFIG.appSubtitle,
-      examLabel: DOMAIN_CONFIG.examLabel,
-      examDate: DOMAIN_CONFIG.examDate,
-      daysLeft: daysUntil(DOMAIN_CONFIG.examDate),
-      segments: DOMAIN_CONFIG.segments,
-      examTargetOptions: DOMAIN_CONFIG.examTargetOptions,
+    quiz: {
+      id: quiz.id,
+      title: quiz.title,
+      occupation: quiz.occupation,
+      icon: quiz.icon,
+      examDate: quiz.examDate ?? null,
+      daysLeft: quiz.examDate ? daysUntil(quiz.examDate) : null,
     },
     profile: {
-      segment: profile.segment,
-      examTarget,
+      quizId: quiz.id,
       level: profile.level,
       totalCorrect: profile.totalCorrect,
       totalAnswers: profile.totalAnswers,
       visibleToPeers: profile.visibleToPeers,
       displayName: profile.displayName,
     },
-    onboardingNeeded,
-    needSegment,
-    needExamTarget,
-    stats: { byGroup, streak, last7 },
+    stats: { byCategory, streak: computeStreak(dates), last7: last7Days(dates) },
     activeSession: profile.currentSession ? presentSession(profile.currentSession) : null,
   }
 })

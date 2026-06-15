@@ -1,284 +1,172 @@
-// 学習対策ドリルの「ドメイン定義」。
-// 試験・検定・社内研修を差し替えるときは、基本このファイルだけを編集する。
-// (元仕様の domain-config.json + genres.json を、サーバー側 TS にまとめたもの。
-//  出題範囲フィルタはサーバーで実行し、クライアントには getMe 経由で必要分だけ渡す。)
+// 学習ドリルの「クイズ(学習アプリ)レジストリ」。
+//
+// ★ 新しいクイズ(学習アプリ)を作るのに必要なのは次の4つだけ:
+//      1. title       … タイトル(表示名)
+//      2. occupation  … 出題する業種(誰向けか)
+//      3. categories  … カテゴリ(出題範囲。任意で topics を足すと出題の幅が広がる)
+//      4. prompt      … 個別のプロンプト(その業種ならではの作問指示)
+//    この QUIZZES 配列に1つ追加すれば、新しい学習アプリが増える(ハードコードではない)。
+//
+// ★ どのユーザーがどのクイズ(業種)かは superuser が割り当てる
+//    (apps/exam-prep/users/{uid}.quizId)。
+// ★ 出題の質を調整したいときは、その業種の prompt.rules を編集して prompt.version を上げる
+//    → 古い生成問題は自動で使われなくなり、新しいプロンプトで作り直される。
 
-export interface SegmentDef {
+export interface QuizCategory {
   id: string
-  label: string
-  hint?: string
-  /** オンボーディングで最上位に出す推奨種別 */
-  isRecommendedDefault?: boolean
-}
-
-export interface ExamTargetDef {
-  id: string
-  label: string
-  /** genres の examLevel と突き合わせる */
-  examLevel: string
-}
-
-export interface DomainConfig {
-  appId: string
-  appTitle: string
-  appSubtitle: string
-  examLabel: string
-  /** ISO (YYYY-MM-DD)。試験日カウントダウンに使う */
-  examDate: string
-  /** AI 出題プロンプトの「あなたは ○○ の出題者」に入る文字列 */
-  aiSubject: string
-  segments: SegmentDef[]
-  examTargetOptions: ExamTargetDef[]
-}
-
-export interface GenreGroup {
-  id: string
+  /** カテゴリ名(レーダーの軸・集中セッションの単位) */
   title: string
-  examLevel: string
-  /** その種別に関係する group か。空配列 = 全 segment 共通 */
-  segmentRelevance: string[]
-  genres: string[]
+  /** カテゴリ内の小トピック(任意)。あると出題の幅が広がる */
+  topics?: string[]
 }
 
-// ===== ドメイン: 看護師国家試験 =====
-export const DOMAIN_CONFIG: DomainConfig = {
-  appId: 'exam-prep',
-  appTitle: '看護師国試ドリル',
-  appSubtitle: '看護師国家試験 一問一答',
-  examLabel: '看護師国家試験',
-  // 実際の試験日に合わせて編集する(国試は例年2月中旬)
-  examDate: '2027-02-14',
-  aiSubject: '看護師国家試験',
-  segments: [
-    {
-      id: '病棟',
-      label: '病棟',
-      isRecommendedDefault: true,
-      hint: '入院患者さんの全身管理。急性期から在宅連携まで幅広く(迷ったらこれ)',
-    },
-    { id: '外来', label: '外来', hint: '外来・在宅・継続看護が中心。重症集中ケアは控えめ' },
-    { id: 'ICU', label: 'ICU', hint: '重症・急性期。クリティカルケアを厚めに' },
+export interface QuizPrompt {
+  /** その業種の出題者像 */
+  persona: string
+  /** その業種ならではの作問ルール(箇条書き) */
+  rules: string[]
+  /** 上げると、この業種の古い生成問題は使われなくなる(プロンプト調整時に +1) */
+  version: number
+}
+
+export interface Quiz {
+  /** 一意ID(ユーザー割り当て・問題タグに使う) */
+  id: string
+  /** 1. タイトル(表示名) */
+  title: string
+  /** 2. 出題する業種(誰向けか) */
+  occupation: string
+  /** 試験日(任意・ISO)。あればカウントダウンを表示 */
+  examDate?: string
+  icon: string
+  /** 3. カテゴリ */
+  categories: QuizCategory[]
+  /** 4. 個別のプロンプト */
+  prompt: QuizPrompt
+}
+
+// ===== クイズ1: おもてなし(接客・接遇)=====
+const OMOTENASHI: Quiz = {
+  id: 'omotenashi',
+  title: 'おもてなしドリル',
+  occupation: 'ホテル・旅館などの接客スタッフ',
+  icon: 'room_service',
+  categories: [
+    { id: 'kihon', title: '接客の基本', topics: ['第一印象・身だしなみ', '言葉遣い・敬語', 'お辞儀・立ち居振る舞い', '笑顔・アイコンタクト'] },
+    { id: 'manner', title: '接遇マナー', topics: ['ご案内の所作', '電話応対', 'クレーム対応の基本', 'メール・文書対応'] },
+    { id: 'hospitality', title: 'ホスピタリティ', topics: ['おもてなしの心', '気配り・察する力', 'インバウンド・異文化対応', '高齢者・バリアフリー配慮'] },
+    { id: 'hygiene', title: '衛生・安全', topics: ['食品衛生の基本', '身だしなみと衛生', '緊急時対応・避難誘導'] },
+    { id: 'front', title: 'フロント業務', topics: ['予約・チェックイン/アウト', '会計・精算', '観光・周辺案内', '一次クレーム対応'] },
+    { id: 'dining', title: '料飲サービス', topics: ['配膳・下げ膳の基本', '料理・飲み物の提供', 'アレルギー対応', '宴会・コース対応'] },
+    { id: 'room', title: '客室・館内サービス', topics: ['客室整備の基本', 'アメニティ・備品', '館内施設の案内', 'プライバシー配慮'] },
   ],
-  // 1種類だけなので、オンボーディングの受験パターン選択(STEP2)は自動スキップされる
-  examTargetOptions: [{ id: 'kokushi', label: '国家試験', examLevel: '国試' }],
-}
-
-export const GENRE_GROUPS: GenreGroup[] = [
-  {
-    id: 'hisshu',
-    title: '必修問題',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: [
-      '看護の対象と保健統計',
-      '看護倫理と関係法規',
-      '主要な症状と看護',
-      '感染防止・医療安全',
-      '基本的な臨床薬理',
-      'フィジカルアセスメント',
+  prompt: {
+    persona: 'あなたは一流の旅館・ホテルで新人スタッフを育てる、接客・接遇の指導者です。',
+    rules: [
+      '実際の接客・接遇の場面を想定した、現場ですぐ役立つ実践的な設問にする。',
+      '敬語(尊敬語・謙譲語・丁寧語)や所作の正誤を、具体的な言い回しで問う。',
+      '正解の選択肢は、現場で本当に推奨されるおもてなしの対応にする。',
+      '資格試験の細かい法令暗記より、お客様の立場に立った気配り・基本動作を重視する。',
     ],
+    version: 1,
   },
-  {
-    id: 'jintai',
-    title: '人体の構造と機能',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: [
-      '循環器',
-      '呼吸器',
-      '消化器',
-      '腎・泌尿器',
-      '内分泌・代謝',
-      '脳・神経',
-      '血液・免疫',
-      '運動器・感覚器',
+}
+
+// ===== クイズ2: 看護師国家試験 =====
+const KANGO: Quiz = {
+  id: 'kango',
+  title: '看護師国試ドリル',
+  occupation: '看護師国家試験の受験者',
+  examDate: '2027-02-14',
+  icon: 'medical_services',
+  categories: [
+    { id: 'hisshu', title: '必修問題', topics: ['看護の対象と保健統計', '看護倫理と関係法規', '主要な症状と看護', '感染防止・医療安全', '基本的な臨床薬理', 'フィジカルアセスメント'] },
+    { id: 'jintai', title: '人体の構造と機能', topics: ['循環器', '呼吸器', '消化器', '腎・泌尿器', '内分泌・代謝', '脳・神経', '血液・免疫', '運動器・感覚器'] },
+    { id: 'shippei', title: '疾病の成り立ちと回復', topics: ['病態生理の基本', '生活習慣病', '感染症', '悪性腫瘍', '主要薬剤と副作用', '検査データの解釈'] },
+    { id: 'shakai', title: '健康支援と社会保障', topics: ['社会保障制度', '医療保険・介護保険', '保健統計・疫学', '公衆衛生・予防', '関係法規'] },
+    { id: 'kiso', title: '基礎看護学', topics: ['看護過程', '日常生活の援助', '与薬・輸液管理', 'バイタルサインと観察', '無菌操作・感染管理', '看護記録とコミュニケーション'] },
+    { id: 'seijin', title: '成人看護学', topics: ['周術期看護', '慢性期看護', 'がん看護・緩和ケア', 'リハビリテーション看護', '栄養・代謝の管理'] },
+    { id: 'ronen', title: '老年看護学', topics: ['加齢に伴う変化', '認知症の看護', '高齢者の生活支援', '転倒・誤嚥の予防'] },
+    { id: 'shoni', title: '小児看護学', topics: ['成長・発達', '小児の疾患と看護', '予防接種・健診', '家族への支援'] },
+    { id: 'bosei', title: '母性看護学', topics: ['妊娠・分娩・産褥', '新生児の看護', '女性のライフサイクル', '母子保健'] },
+    { id: 'seishin', title: '精神看護学', topics: ['精神疾患の理解', '精神科の治療と看護', '地域精神保健', '危機介入'] },
+    { id: 'critical', title: '急性期・クリティカルケア', topics: ['急変対応・一次救命処置', '人工呼吸器の管理', '循環動態モニタリング', 'ショックと輸液療法', '術後合併症の早期発見'] },
+    { id: 'zaitaku', title: '在宅・地域看護', topics: ['在宅療養の支援', '訪問看護', '社会資源の活用', '外来・継続看護', '退院支援と地域連携'] },
+    { id: 'togo', title: '看護の統合と実践', topics: ['医療安全管理', '災害看護', 'チーム医療・多職種連携', '看護管理の基本'] },
+  ],
+  prompt: {
+    persona: 'あなたは看護師国家試験の対策を教える予備校講師です。',
+    rules: [
+      '出題は国家試験の出題基準に沿った、標準的で確実な内容にする。',
+      '数値・基準値・法制度は正確に。あいまいな場合は基本的・代表的な値を使う。',
+      '解説には根拠(病態生理や原則)を一言入れて、丸暗記でなく理解につなげる。',
     ],
+    version: 1,
   },
-  {
-    id: 'shippei',
-    title: '疾病の成り立ちと回復',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: [
-      '病態生理の基本',
-      '生活習慣病',
-      '感染症',
-      '悪性腫瘍',
-      '主要薬剤と副作用',
-      '検査データの解釈',
-    ],
-  },
-  {
-    id: 'shakai',
-    title: '健康支援と社会保障',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: ['社会保障制度', '医療保険・介護保険', '保健統計・疫学', '公衆衛生・予防', '関係法規'],
-  },
-  {
-    id: 'kiso',
-    title: '基礎看護学',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: [
-      '看護過程',
-      '日常生活の援助',
-      '与薬・輸液管理',
-      'バイタルサインと観察',
-      '無菌操作・感染管理',
-      '看護記録とコミュニケーション',
-    ],
-  },
-  {
-    id: 'seijin',
-    title: '成人看護学',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: [
-      '周術期看護',
-      '慢性期看護',
-      'がん看護・緩和ケア',
-      'リハビリテーション看護',
-      '栄養・代謝の管理',
-    ],
-  },
-  {
-    id: 'ronen',
-    title: '老年看護学',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: ['加齢に伴う変化', '認知症の看護', '高齢者の生活支援', '転倒・誤嚥の予防'],
-  },
-  {
-    id: 'shoni',
-    title: '小児看護学',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: ['成長・発達', '小児の疾患と看護', '予防接種・健診', '家族への支援'],
-  },
-  {
-    id: 'bosei',
-    title: '母性看護学',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: ['妊娠・分娩・産褥', '新生児の看護', '女性のライフサイクル', '母子保健'],
-  },
-  {
-    id: 'seishin',
-    title: '精神看護学',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: ['精神疾患の理解', '精神科の治療と看護', '地域精神保健', '危機介入'],
-  },
-  {
-    id: 'critical',
-    title: '急性期・クリティカルケア',
-    examLevel: '国試',
-    segmentRelevance: ['病棟', 'ICU'],
-    genres: [
-      '急変対応・一次救命処置',
-      '人工呼吸器の管理',
-      '循環動態モニタリング',
-      'ショックと輸液療法',
-      '術後合併症の早期発見',
-      '重症患者の全身管理',
-    ],
-  },
-  {
-    id: 'zaitaku',
-    title: '在宅・地域看護',
-    examLevel: '国試',
-    segmentRelevance: ['外来', '病棟'],
-    genres: ['在宅療養の支援', '訪問看護', '社会資源の活用', '外来・継続看護', '退院支援と地域連携'],
-  },
-  {
-    id: 'togo',
-    title: '看護の統合と実践',
-    examLevel: '国試',
-    segmentRelevance: [],
-    genres: ['医療安全管理', '災害看護', 'チーム医療・多職種連携', '看護管理の基本'],
-  },
-]
-
-export interface GenreTarget {
-  groupId: string
-  groupTitle: string
-  genre: string
-  examLevel: string
 }
 
-/** examTarget(id) → examLevel を解決 */
-export function examLevelForTarget(targetId: string | null | undefined): string | null {
-  const t = DOMAIN_CONFIG.examTargetOptions.find((x) => x.id === targetId)
-  return t?.examLevel ?? null
+// ===== レジストリ(ここに足すだけでクイズが増える)=====
+export const QUIZZES: Quiz[] = [OMOTENASHI, KANGO]
+export const DEFAULT_QUIZ_ID = 'omotenashi'
+
+/** quizId からクイズを解決(未割り当て・不明はデフォルト) */
+export function getQuiz(quizId?: string | null): Quiz {
+  return (
+    QUIZZES.find((q) => q.id === quizId) ||
+    QUIZZES.find((q) => q.id === DEFAULT_QUIZ_ID) ||
+    QUIZZES[0]
+  )
 }
 
-/** 受験パターンが1種類ならそれを既定にする(オンボーディングSTEP2の自動スキップ用) */
-export function defaultExamTarget(): ExamTargetDef | null {
-  return DOMAIN_CONFIG.examTargetOptions.length === 1 ? DOMAIN_CONFIG.examTargetOptions[0] : null
+/** 管理画面の業種ドロップダウン用 */
+export function listQuizzes() {
+  return QUIZZES.map((q) => ({ id: q.id, title: q.title, occupation: q.occupation }))
 }
 
-/** segmentRelevance が空 = 全種別共通の group か */
-export function isCommonGroup(groupId: string): boolean {
-  const g = GENRE_GROUPS.find((x) => x.id === groupId)
-  return !g || !g.segmentRelevance || g.segmentRelevance.length === 0
+export function isValidQuizId(quizId: string): boolean {
+  return QUIZZES.some((q) => q.id === quizId)
 }
 
-export function groupTitleById(groupId: string): string {
-  return GENRE_GROUPS.find((g) => g.id === groupId)?.title ?? groupId
+export function categoryTitle(quiz: Quiz, categoryId: string): string {
+  return quiz.categories.find((c) => c.id === categoryId)?.title ?? categoryId
 }
 
-/** レーダー/バーの達成率の分母(その group を「習得した」とみなす一意正解数の目安) */
-export function groupGoal(groupId: string): number {
-  const g = GENRE_GROUPS.find((x) => x.id === groupId)
-  return Math.max(4, (g?.genres.length ?? 4) * 2)
+/** レーダー/バーの達成率の分母 */
+export function categoryGoal(quiz: Quiz, categoryId: string): number {
+  const c = quiz.categories.find((x) => x.id === categoryId)
+  return Math.max(4, (c?.topics?.length ?? 3) * 2)
 }
 
-/**
- * あるユーザー(segment + examLevel)に出してよい group。
- * 「種別違いの問題が混ざらない」ことをここで厳密に守る。
- */
-export function relevantGroups(segment: string, examLevel: string): GenreGroup[] {
-  return GENRE_GROUPS.filter((g) => {
-    if (g.examLevel !== examLevel) return false
-    if (!g.segmentRelevance || g.segmentRelevance.length === 0) return true // 全種別共通
-    return g.segmentRelevance.includes(segment)
-  })
+export interface QuizTarget {
+  categoryId: string
+  categoryTitle: string
+  topic: string
 }
 
-/** segment/examLevel に合うジャンルをフラット化(出題候補) */
-export function genreTargets(segment: string, examLevel: string): GenreTarget[] {
-  const out: GenreTarget[] = []
-  for (const g of relevantGroups(segment, examLevel)) {
-    for (const genre of g.genres) {
-      out.push({ groupId: g.id, groupTitle: g.title, genre, examLevel: g.examLevel })
-    }
+/** 出題候補(カテゴリ×トピックを平らに展開。topics 無しはカテゴリ名を1トピック扱い) */
+export function quizTargets(quiz: Quiz): QuizTarget[] {
+  const out: QuizTarget[] = []
+  for (const c of quiz.categories) {
+    const topics = c.topics && c.topics.length ? c.topics : [c.title]
+    for (const t of topics) out.push({ categoryId: c.id, categoryTitle: c.title, topic: t })
   }
   return out
 }
 
-/** 試験日まで残り何日か(JST 基準・当日を含む) */
+// ---- 日付系(クイズに依らない)----
 export function daysUntil(iso: string): number {
   const exam = new Date(`${iso}T00:00:00+09:00`).getTime()
-  const now = Date.now()
-  return Math.ceil((exam - now) / (24 * 3600 * 1000))
+  return Math.ceil((exam - Date.now()) / (24 * 3600 * 1000))
 }
 
 function toJstDay(d: Date): string {
   return new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 }
 
-/** JST の「今日から数えて n 日前」の日付キー(0=今日) */
-export function jstDayKey(daysAgo = 0): string {
-  return toJstDay(new Date(Date.now() - daysAgo * 24 * 3600 * 1000))
-}
-
-/** 回答日(Date配列)から、今日(または昨日)から遡った連続学習日数を求める */
 export function computeStreak(dates: Date[]): number {
   const days = new Set(dates.map(toJstDay))
   if (days.size === 0) return 0
   let cursor = new Date()
-  // 今日まだ未回答なら、昨日を起点に数える(streak を途切れさせない)
   if (!days.has(toJstDay(cursor))) cursor = new Date(Date.now() - 24 * 3600 * 1000)
   let streak = 0
   for (;;) {
@@ -290,7 +178,6 @@ export function computeStreak(dates: Date[]): number {
   return streak
 }
 
-/** 直近7日(古い→新しい)それぞれ学習したか。streak のドット表示用 */
 export function last7Days(dates: Date[]): { day: string; studied: boolean }[] {
   const days = new Set(dates.map(toJstDay))
   const out: { day: string; studied: boolean }[] = []

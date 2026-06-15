@@ -1,7 +1,6 @@
-// submitAnswer: questionId + userAnswer を判定し、progress を書き、カウンタを増やし、
-// { isCorrect, answer, explanation, ... } を返す。answer/explanation はここで初めて開示する。
-// choice は完全一致、free(記述)は AI 採点(表記ゆれ・言い換えを正解扱い)。
-import { DOMAIN_CONFIG } from '~/server/utils/exam-prep/config'
+// submitAnswer: choice は完全一致、free(記述)は AI 採点。progress 追記 + カウンタ increment。
+// answer/explanation はここで初めて開示する。
+import { getQuiz } from '~/server/utils/exam-prep/config'
 import {
   getProfile,
   getQuestion,
@@ -21,9 +20,7 @@ export default defineEventHandler(async (event) => {
   const questionId = String(body?.questionId || '')
   const userAnswer = String(body?.userAnswer ?? '')
 
-  if (!questionId) {
-    throw createError({ statusCode: 400, message: 'questionId が必要です' })
-  }
+  if (!questionId) throw createError({ statusCode: 400, message: 'questionId が必要です' })
 
   const profile = await getProfile(decoded.uid)
   const session = profile?.currentSession
@@ -32,15 +29,14 @@ export default defineEventHandler(async (event) => {
   }
 
   const q = await getQuestion(questionId)
-  if (!q) {
-    throw createError({ statusCode: 404, message: '問題が見つかりません' })
-  }
+  if (!q) throw createError({ statusCode: 404, message: '問題が見つかりません' })
 
   let isCorrect = false
   let aiReason: string | undefined
   if (q.type === 'free') {
+    const quiz = getQuiz(profile!.quizId)
     const g = await gradeAnswerByAI({
-      aiSubject: DOMAIN_CONFIG.aiSubject,
+      aiSubject: quiz.title,
       question: q.question,
       answer: q.answer,
       synonyms: q.keywords,
@@ -59,8 +55,8 @@ export default defineEventHandler(async (event) => {
     isCorrect,
     userAnswer,
     attempts,
-    groupId: q.groupId,
-    genre: q.genre,
+    categoryId: q.categoryId,
+    topic: q.topic,
   })
 
   const present = updated ? presentSession(updated) : null
