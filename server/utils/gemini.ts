@@ -81,6 +81,7 @@ export function getGemini() {
     async chat(args: {
       contents: Array<{ role: 'user' | 'model'; parts: Array<any> }>
       systemInstruction?: { parts: Array<{ text: string }> }
+      generationConfig?: Record<string, any>
     }): Promise<GenContentResponse> {
       return call(args)
     },
